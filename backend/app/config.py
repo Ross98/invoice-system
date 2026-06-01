@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     # 应用
     APP_TITLE: str = "发票管理系统"
-    APP_VERSION: str = "1.0.1"
+    APP_VERSION: str = "2.0.0"
 
     # 部署
     HOST: str = "0.0.0.0"

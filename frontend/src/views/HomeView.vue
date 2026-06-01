@@ -26,7 +26,7 @@
       </v-col>
 
       <v-col cols="12" md="4">
-        <v-card class="text-center" height="200" @click="$router.push('/upload')">
+        <v-card class="text-center" height="200" @click="$router.push('/invoices/new')">
           <v-card-text class="pa-6">
             <v-icon size="64" color="green">mdi-upload</v-icon>
             <div class="text-h5 mt-4">上传发票</div>
@@ -36,7 +36,7 @@
       </v-col>
 
       <v-col cols="12" md="4">
-        <v-card class="text-center" height="200" @click="$router.push('/categories')">
+        <v-card class="text-center" height="200" @click="$router.push('/master-data/categories')">
           <v-card-text class="pa-6">
             <v-icon size="64" color="orange">mdi-tag</v-icon>
             <div class="text-h5 mt-4">分类管理</div>
