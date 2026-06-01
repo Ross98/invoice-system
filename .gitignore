@@ -1,0 +1,75 @@
+# =====================
+# Python
+# =====================
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.venv/
+venv/
+*.db
+*.sqlite3
+
+# =====================
+# Node / Frontend
+# =====================
+node_modules/
+frontend/dist/
+frontend_dist/
+
+# =====================
+# Build output
+# =====================
+dist/
+build/
+*.spec.bak
+
+# =====================
+# User data (runtime)
+# =====================
+data/
+uploads/
+
+# =====================
+# Environment
+# =====================
+.env
+
+# =====================
+# Large runtime binaries (Tesseract + Poppler ~185MB)
+# Users must install these separately, see README
+# =====================
+runtime/
+
+# =====================
+# IDE
+# =====================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# =====================
+# Old build artifacts (legacy frontend output dir)
+# =====================
+backend/frontend/
+
+# =====================
+# Test / Temp files
+# =====================
+*.xlsx
+!backend/templates/*.xlsx
+backend/ocr_test_results.md
+backend/README.md
+
+# =====================
+# WorkBuddy (internal tooling)
+# =====================
+.workbuddy/
+
+# =====================
+# OS
+# =====================
+.DS_Store
+Thumbs.db
