@@ -1,0 +1,54 @@
+# ============================================================
+# 发票管理系统 - systemd 服务配置
+# 适用: 直接在服务器上运行（不用 Docker）
+#
+# 安装:
+#   sudo cp invoice-system.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable invoice-system
+#   sudo systemctl start invoice-system
+#
+# 日常管理:
+#   sudo systemctl status invoice-system   # 查看状态
+#   sudo systemctl restart invoice-system  # 重启
+#   sudo journalctl -u invoice-system -f   # 查看日志
+# ============================================================
+
+[Unit]
+Description=发票管理系统 (Invoice Management System)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+
+# 工作目录
+WorkingDirectory=/opt/invoice-system/backend
+
+# 环境变量文件
+EnvironmentFile=/opt/invoice-system/backend/.env
+
+# 启动命令
+ExecStart=/opt/invoice-system/backend/.venv/bin/uvicorn main:app \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --workers 2 \
+    --log-level info \
+    --access-log
+
+# 重启策略
+Restart=always
+RestartSec=5
+
+# 资源限制
+LimitNOFILE=65536
+MemoryMax=1G
+
+# 日志
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=invoice-system
+
+[Install]
+WantedBy=multi-user.target

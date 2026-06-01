@@ -40,10 +40,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# 配置 CORS
+# 配置 CORS（生产环境通过 CORS_ORIGINS 环境变量控制）
+cors_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",")]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境应限制
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -116,20 +117,18 @@ if __name__ == "__main__":
     import uvicorn
     is_packaged = getattr(sys, "frozen", False)
     if is_packaged:
-        # PyInstaller 打包环境：直接传 app 对象（无法通过模块名导入）
         uvicorn.run(
             app,
-            host="127.0.0.1",
-            port=8000,
+            host=settings.HOST,
+            port=settings.PORT,
             reload=False,
             log_level="info",
         )
     else:
-        # 开发环境：支持 reload
         uvicorn.run(
             "main:app",
-            host="127.0.0.1",
-            port=8000,
+            host=settings.HOST,
+            port=settings.PORT,
             reload=True,
             log_level="info",
         )

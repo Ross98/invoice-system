@@ -1,0 +1,68 @@
+# =====================
+# Python
+# =====================
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+backend/.venv/
+backend/build/
+backend/dist/
+backend/data/
+backend/uploads/
+backend/invoice.db
+*.db
+
+# =====================
+# Node.js
+# =====================
+frontend/node_modules/
+frontend/dist/
+
+# =====================
+# Runtime (OCR 二进制，Docker 中用系统包替代)
+# =====================
+backend/runtime/
+
+# =====================
+# IDE / Editor
+# =====================
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# =====================
+# Git
+# =====================
+.git/
+.gitignore
+.gitattributes
+
+# =====================
+# Docs / Misc
+# =====================
+*.md
+!README.md
+LICENSE
+build_package.py
+*.spec
+backend/invoice-system.spec
+
+# =====================
+# Env
+# =====================
+.env
+backend/.env
+deploy/.env.local
+
+# =====================
+# WorkBuddy
+# =====================
+.workbuddy/
+
+# =====================
+# OS junk
+# =====================
+.DS_Store
+Thumbs.db

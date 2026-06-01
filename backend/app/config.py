@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     APP_TITLE: str = "发票管理系统"
     APP_VERSION: str = "1.0.1"
 
+    # 部署
+    HOST: str = "0.0.0.0"
+    PORT: int = 8000
+    CORS_ORIGINS: str = "*"  # 生产环境改为具体域名，如 "https://invoice.your-domain.com"
+
     class Config:
         env_file = _default_env_file()
 
