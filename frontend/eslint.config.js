@@ -24,6 +24,7 @@ export default [
       // ---------- Vue 特定 ----------
       "vue/multi-word-component-names": "off", // 允许单词组件名（如 Dashboard、Settings）
       "vue/require-default-prop": "off",
+      "vue/valid-v-slot": "off", // Vuetify 3 数据表格使用 #item.column 语法，ESLint 误判
       "vue/no-v-html": "warn",
       "vue/html-self-closing": ["warn", {
         html: { void: "always", normal: "never" },

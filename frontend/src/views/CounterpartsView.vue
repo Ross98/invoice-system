@@ -19,7 +19,7 @@
           :loading="loading"
           hover
         >
-          <template v-slot:item.actions="{ item }">
+          <template #item.actions="{ item }">
             <v-btn icon variant="text" size="small" @click="editItem(item)">
               <v-icon>mdi-pencil</v-icon>
             </v-btn>

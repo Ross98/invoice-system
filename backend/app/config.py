@@ -1,7 +1,7 @@
-from pydantic_settings import BaseSettings
 from pathlib import Path
-import os
 import sys
+
+from pydantic_settings import BaseSettings
 
 
 def _default_env_file() -> str:

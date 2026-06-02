@@ -1,32 +1,41 @@
 """发票管理 API 路由"""
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Body
-from fastapi.responses import FileResponse, StreamingResponse
-from sqlalchemy.orm import Session, selectinload
-from sqlalchemy import or_
-from typing import List, Optional
-from pathlib import Path
-import io
 import copy
-from datetime import datetime, date
-from collections import defaultdict
+from datetime import date, datetime
+import io
+from pathlib import Path
 from urllib.parse import quote
+
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse, StreamingResponse
 from openpyxl import load_workbook
-from openpyxl.styles import Border, Side, Alignment
-from openpyxl.utils import get_column_letter
+from openpyxl.styles import Alignment, Border, Side
+from sqlalchemy import or_
+from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
-from ..models.invoice import Invoice, InvoiceDetail, InvoiceFile, Category, Counterpart
+from ..models.invoice import Category, Counterpart, Invoice, InvoiceDetail, InvoiceFile
+from ..resource_path import get_template_path
 from ..schemas.invoice import (
-    InvoiceCreate, InvoiceUpdate, Invoice as InvoiceSchema,
-    InvoiceDetailCreate, InvoiceDetail as InvoiceDetailSchema,
-    InvoiceFile as InvoiceFileSchema,
-    CategoryCreate, Category as CategorySchema,
-    CounterpartCreate, Counterpart as CounterpartSchema,
-    InvoiceFilter,
+    Category as CategorySchema,
+)
+from ..schemas.invoice import (
+    CategoryCreate,
+    CounterpartCreate,
+    InvoiceCreate,
+    InvoiceUpdate,
     PaginatedResponse,
 )
-from ..services.file_storage import store_file, retrieve_file, delete_file
+from ..schemas.invoice import (
+    Counterpart as CounterpartSchema,
+)
+from ..schemas.invoice import (
+    Invoice as InvoiceSchema,
+)
+from ..schemas.invoice import (
+    InvoiceFile as InvoiceFileSchema,
+)
+from ..services.file_storage import delete_file, retrieve_file, store_file
 
 router = APIRouter(prefix="/api", tags=["发票管理"])
 
@@ -38,11 +47,11 @@ def create_invoice(invoice_data: InvoiceCreate, db: Session = Depends(get_db)):
     """创建发票（含明细）"""
     invoice = Invoice(**invoice_data.model_dump(exclude={"details"}))
     db.add(invoice)
-    
+
     for detail_data in invoice_data.details:
         detail = InvoiceDetail(invoice=invoice, **detail_data.model_dump())
         db.add(detail)
-    
+
     db.commit()
     db.refresh(invoice)
     return invoice
@@ -50,16 +59,16 @@ def create_invoice(invoice_data: InvoiceCreate, db: Session = Depends(get_db)):
 
 @router.get("/invoices", response_model=PaginatedResponse[InvoiceSchema])
 def list_invoices(
-    invoice_number: Optional[str] = Query(None),
-    invoice_code: Optional[str] = Query(None),
-    invoice_type: Optional[str] = Query(None),
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
-    min_amount: Optional[float] = Query(None),
-    max_amount: Optional[float] = Query(None),
-    counterpart_id: Optional[int] = Query(None),
-    category_id: Optional[int] = Query(None),
-    search_text: Optional[str] = Query(None),
+    invoice_number: str | None = Query(None),
+    invoice_code: str | None = Query(None),
+    invoice_type: str | None = Query(None),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
+    min_amount: float | None = Query(None),
+    max_amount: float | None = Query(None),
+    counterpart_id: int | None = Query(None),
+    category_id: int | None = Query(None),
+    search_text: str | None = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -70,7 +79,7 @@ def list_invoices(
         selectinload(Invoice.category),
         selectinload(Invoice.details),
     )
-    
+
     if invoice_number:
         query = query.filter(Invoice.invoice_number.like(f"%{invoice_number}%"))
     if invoice_code:
@@ -103,10 +112,10 @@ def list_invoices(
                 Counterpart.name.like(f"%{escaped}%", escape="\\"),
             )
         )
-    
+
     total = query.count()
     items = query.order_by(Invoice.invoice_date.desc()).offset(skip).limit(limit).all()
-    
+
     return {"items": items, "total": total}
 
 
@@ -125,12 +134,12 @@ def update_invoice(invoice_id: int, invoice_data: InvoiceUpdate, db: Session = D
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="发票不存在")
-    
+
     # 更新发票主字段
     update_dict = invoice_data.model_dump(exclude={"details"}, exclude_unset=True)
     for key, value in update_dict.items():
         setattr(invoice, key, value)
-    
+
     # 更新明细（如果提供了）
     if invoice_data.details is not None:
         # 删除旧明细
@@ -139,7 +148,7 @@ def update_invoice(invoice_id: int, invoice_data: InvoiceUpdate, db: Session = D
         for detail_data in invoice_data.details:
             detail = InvoiceDetail(invoice_id=invoice_id, **detail_data.model_dump())
             db.add(detail)
-    
+
     db.commit()
     db.refresh(invoice)
     return invoice
@@ -151,11 +160,11 @@ def delete_invoice(invoice_id: int, db: Session = Depends(get_db)):
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="发票不存在")
-    
+
     # 清理本地文件
     for file in invoice.files:
         delete_file(file.storage_mode, file.file_path)
-    
+
     db.delete(invoice)
     db.commit()
 
@@ -168,14 +177,14 @@ def upload_invoice_file(invoice_id: int, file: UploadFile = File(...), db: Sessi
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="发票不存在")
-    
+
     if not file.filename:
         raise HTTPException(status_code=400, detail="文件名不能为空")
-    
+
     # 读取文件内容
     content = file.file.read()
     file_size = len(content)
-    
+
     # 检查文件大小
     from ..config import settings
     if file_size > settings.max_file_size_bytes:
@@ -183,16 +192,16 @@ def upload_invoice_file(invoice_id: int, file: UploadFile = File(...), db: Sessi
             status_code=400,
             detail=f"文件大小超过限制 ({settings.MAX_FILE_SIZE_MB}MB)"
         )
-    
+
     # 获取文件类型
     ext = Path(file.filename).suffix.lower().lstrip(".")
     allowed_types = {"pdf", "png", "jpg", "jpeg", "bmp", "tiff", "tif"}
     if ext not in allowed_types:
         raise HTTPException(status_code=400, detail=f"不支持的文件类型: {ext}")
-    
+
     # 存储文件
     storage_mode, file_path, blob_data = store_file(content, file.filename, invoice_id)
-    
+
     # 创建文件记录
     invoice_file = InvoiceFile(
         invoice_id=invoice_id,
@@ -206,11 +215,11 @@ def upload_invoice_file(invoice_id: int, file: UploadFile = File(...), db: Sessi
     db.add(invoice_file)
     db.commit()
     db.refresh(invoice_file)
-    
+
     return invoice_file
 
 
-@router.get("/invoices/{invoice_id}/files", response_model=List[InvoiceFileSchema])
+@router.get("/invoices/{invoice_id}/files", response_model=list[InvoiceFileSchema])
 def list_invoice_files(invoice_id: int, db: Session = Depends(get_db)):
     """获取发票的所有原文件"""
     files = db.query(InvoiceFile).filter(InvoiceFile.invoice_id == invoice_id).all()
@@ -226,7 +235,7 @@ def download_invoice_file(invoice_id: int, file_id: int, db: Session = Depends(g
     ).first()
     if not file_record:
         raise HTTPException(status_code=404, detail="文件不存在")
-    
+
     try:
         content = retrieve_file(
             file_record.storage_mode,
@@ -234,8 +243,8 @@ def download_invoice_file(invoice_id: int, file_id: int, db: Session = Depends(g
             file_record.blob_data,
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"读取文件失败: {str(e)}")
-    
+        raise HTTPException(status_code=500, detail=f"读取文件失败: {e!s}") from e
+
     media_types = {
         "PDF": "application/pdf",
         "PNG": "image/png",
@@ -243,7 +252,7 @@ def download_invoice_file(invoice_id: int, file_id: int, db: Session = Depends(g
         "JPEG": "image/jpeg",
     }
     media_type = media_types.get(file_record.file_type, "application/octet-stream")
-    
+
     return FileResponse(
         io.BytesIO(content),
         media_type=media_type,
@@ -260,7 +269,7 @@ def delete_invoice_file(invoice_id: int, file_id: int, db: Session = Depends(get
     ).first()
     if not file_record:
         raise HTTPException(status_code=404, detail="文件不存在")
-    
+
     delete_file(file_record.storage_mode, file_record.file_path)
     db.delete(file_record)
     db.commit()
@@ -278,7 +287,7 @@ def create_category(category_data: CategoryCreate, db: Session = Depends(get_db)
     return category
 
 
-@router.get("/categories", response_model=List[CategorySchema])
+@router.get("/categories", response_model=list[CategorySchema])
 def list_categories(db: Session = Depends(get_db)):
     """获取所有消费分类"""
     return db.query(Category).all()
@@ -319,7 +328,7 @@ def create_counterpart(counterpart_data: CounterpartCreate, db: Session = Depend
     return counterpart
 
 
-@router.get("/counterparts", response_model=List[CounterpartSchema])
+@router.get("/counterparts", response_model=list[CounterpartSchema])
 def list_counterparts(db: Session = Depends(get_db)):
     """获取所有对方单位"""
     return db.query(Counterpart).all()
@@ -351,11 +360,11 @@ def delete_counterpart(counterpart_id: int, db: Session = Depends(get_db)):
 # ==================== 发票导出 ====================
 
 # 模板路径通过 resource_path 模块统一管理，兼容开发/打包环境
-from app.resource_path import get_template_path
+
 TEMPLATE_PATH = get_template_path()
 
 @router.post("/invoices/export")
-def export_invoices(invoice_ids: List[int] = Body(...), db: Session = Depends(get_db)):
+def export_invoices(invoice_ids: list[int] = Body(...), db: Session = Depends(get_db)):
     """导出选中发票到 Excel（按模板格式）"""
     if not invoice_ids:
         raise HTTPException(status_code=400, detail="请选择至少一张发票")

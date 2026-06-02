@@ -171,16 +171,16 @@
                 hide-default-footer
                 density="comfortable"
               >
-                <template v-slot:item.unit_price="{ item }">
+                <template #item.unit_price="{ item }">
                   ¥{{ formatAmount(item.unit_price) }}
                 </template>
-                <template v-slot:item.amount="{ item }">
+                <template #item.amount="{ item }">
                   ¥{{ formatAmount(item.amount) }}
                 </template>
-                <template v-slot:item.tax_rate="{ item }">
+                <template #item.tax_rate="{ item }">
                   {{ item.tax_rate ? item.tax_rate + '%' : '-' }}
                 </template>
-                <template v-slot:item.service_date="{ item }">
+                <template #item.service_date="{ item }">
                   {{ formatDate(item.service_date) }}
                 </template>
               </v-data-table>

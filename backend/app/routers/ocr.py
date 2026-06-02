@@ -1,18 +1,17 @@
 """OCR 相关 API 路由"""
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
-from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
-from typing import Optional
+from datetime import datetime
+from pathlib import Path
 import tempfile
 import traceback
-from pathlib import Path
-from datetime import datetime
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..services.ocr import ocr_file, ocr_image, ocr_pdf, is_available, parse_invoice_from_ocr
-from ..models.invoice import Invoice, Counterpart, InvoiceDetail
-from ..schemas.invoice import InvoiceCreate, InvoiceDetailCreate
+from ..models.invoice import Counterpart, Invoice, InvoiceDetail
+from ..schemas.invoice import InvoiceCreate
+from ..services.ocr import is_available, ocr_image, ocr_pdf, parse_invoice_from_ocr
 
 router = APIRouter(prefix="/api/ocr", tags=["OCR"])
 
@@ -20,14 +19,14 @@ router = APIRouter(prefix="/api/ocr", tags=["OCR"])
 def _fallback_from_filename(filename: str, parsed: dict, ocr_text: str) -> None:
     """从文件名兜底提取销方名称和发票号码（OCR 无法识别时使用）"""
     import re as _re
-    
+
     fname = filename
     if not fname:
         return
-    
+
     # 去掉扩展名
     fname_noext = _re.sub(r'\.[^.]+$', '', fname)
-    
+
     # ===== 1. 兜底销方名称 =====
     # 文件名格式通常是：日期_金额_公司名  或  日期_公司名
     # 从文件名中提取中文公司名（4-40个中文字符含括号）
@@ -56,7 +55,7 @@ def _fallback_from_filename(filename: str, parsed: dict, ocr_text: str) -> None:
                     break
             if parsed.get("counterpart_name") and parsed["counterpart_name"] not in ("", "TAXI", "铁路客票"):
                 break
-    
+
     # ===== 2. 兜底发票号码 =====
     if not parsed.get("invoice_number"):
         date_match = _re.search(r'(?:^|[_-])(\d{6}|\d{8})(?:[_-]|$)', fname_noext)
@@ -73,7 +72,7 @@ def _fallback_from_filename(filename: str, parsed: dict, ocr_text: str) -> None:
             fname_hash = hashlib.md5(fname_noext.encode()).hexdigest()[:10].upper()
             parsed["invoice_number"] = f"FN-{fname_hash}"
             print(f"[DEBUG] 文件名兜底-发票号码(无日期): {parsed['invoice_number']}", flush=True)
-    
+
     # ===== 2.5 兜底发票代码 =====
     # 出租车/铁路等特殊发票类型 OCR 通常识别不出发票代码
     if not parsed.get("invoice_code"):
@@ -89,7 +88,7 @@ def _fallback_from_filename(filename: str, parsed: dict, ocr_text: str) -> None:
                     ds = "20" + ds
             parsed["invoice_code"] = f"{prefix}-{ds}" if ds else f"{prefix}-NODATE"
             print(f"[DEBUG] 文件名兜底-发票代码: {parsed['invoice_code']}", flush=True)
-    
+
     # ===== 3. 兜底发票日期（从文件名提取 YYMMDD 或 YYYYMMDD）=====
     if not parsed.get("invoice_date") or parsed["invoice_date"] == "":
         date_match = _re.search(r'(?:^|[_-])(\d{6}|\d{8})(?:[_-]|$)', fname_noext)
@@ -103,7 +102,7 @@ def _fallback_from_filename(filename: str, parsed: dict, ocr_text: str) -> None:
                     dt = _dt.strptime(ds, "%Y%m%d")
                 parsed["invoice_date"] = dt.strftime("%Y-%m-%d")
                 print(f"[DEBUG] 文件名兜底-日期: {parsed['invoice_date']}", flush=True)
-            except:
+            except (ValueError, KeyError):
                 pass
 
 
@@ -120,7 +119,7 @@ def get_ocr_status():
 @router.post("/recognize")
 async def recognize_file(
     file: UploadFile = File(...),
-    lang: Optional[str] = "chi_sim+eng",
+    lang: str | None = "chi_sim+eng",
     db: Session = Depends(get_db),
 ):
     """上传文件进行 OCR 识别，返回识别文本"""
@@ -129,35 +128,35 @@ async def recognize_file(
             status_code=503,
             detail="OCR 服务不可用。请安装 Tesseract 5.x 并添加中文语言包。"
         )
-    
+
     if not file.filename:
         raise HTTPException(status_code=400, detail="文件名不能为空")
-    
+
     # 保存临时文件
     ext = Path(file.filename).suffix.lower()
     allowed_exts = {".pdf", ".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif"}
     if ext not in allowed_exts:
         raise HTTPException(status_code=400, detail=f"不支持的文件类型: {ext}")
-    
+
     with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
         content = await file.read()
         tmp.write(content)
         tmp_path = tmp.name
-    
+
     try:
         # 执行 OCR
         if ext == ".pdf":
             text = ocr_pdf(tmp_path, lang)
         else:
             text = ocr_image(tmp_path, lang)
-        
+
         return {
             "filename": file.filename,
             "text": text,
             "language": lang,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"OCR 识别失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"OCR 识别失败: {e!s}") from e
     finally:
         Path(tmp_path).unlink(missing_ok=True)
 
@@ -166,7 +165,7 @@ async def recognize_file(
 async def recognize_and_associate(
     invoice_id: int,
     file: UploadFile = File(...),
-    lang: Optional[str] = "chi_sim+eng",
+    lang: str | None = "chi_sim+eng",
     db: Session = Depends(get_db),
 ):
     """上传文件进行 OCR 识别，并关联到指定发票"""
@@ -174,14 +173,14 @@ async def recognize_and_associate(
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="发票不存在")
-    
+
     # 先上传文件
     from ..routers.invoices import upload_invoice_file
     file_response = await upload_invoice_file(invoice_id, file, db)
-    
+
     # 执行 OCR
     ocr_result = await recognize_file(file, lang, db)
-    
+
     return {
         "file": file_response,
         "ocr_result": ocr_result,
@@ -192,7 +191,7 @@ async def recognize_and_associate(
 @router.post("/parse")
 async def parse_invoice(
     file: UploadFile = File(...),
-    lang: Optional[str] = "chi_sim+eng",
+    lang: str | None = "chi_sim+eng",
     db: Session = Depends(get_db),
 ):
     """上传文件进行 OCR 识别并解析为结构化发票信息"""
@@ -201,43 +200,42 @@ async def parse_invoice(
             status_code=503,
             detail="OCR 服务不可用。请安装 Tesseract 5.x 并添加中文语言包。"
         )
-    
+
     if not file.filename:
         raise HTTPException(status_code=400, detail="文件名不能为空")
-    
+
     # 保存临时文件
     ext = Path(file.filename).suffix.lower()
     allowed_exts = {".pdf", ".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif"}
     if ext not in allowed_exts:
         raise HTTPException(status_code=400, detail=f"不支持的文件类型: {ext}")
-    
+
     with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
         content = await file.read()
         tmp.write(content)
         tmp_path = tmp.name
-    
+
     try:
         # 执行 OCR
-        ocr_errors = []
         text = ""
-        
+
         if ext == ".pdf":
             text = ocr_pdf(tmp_path, lang)
         else:
             text = ocr_image(tmp_path, lang)
-        
+
         if not text or len(text.strip()) < 10:
             raise HTTPException(
                 status_code=422,
                 detail="OCR 未能从图片中识别到足够文字。请确保图片清晰、光照均匀，建议使用 300 DPI 以上的扫描件。"
             )
-        
+
         # 解析为结构化信息
         parsed = parse_invoice_from_ocr(text)
-        
+
         # 兜底：从文件名提取关键字段（适用于 OCR 无法识别销方/号码的情况）
         _fallback_from_filename(file.filename or "", parsed, text)
-        
+
         # 兜底：从文件名提取金额（适用于 OCR 无法识别金额的情况）
         if not parsed.get("total_with_tax") or float(parsed.get("total_with_tax", 0)) == 0:
             import re as _re2
@@ -255,9 +253,9 @@ async def parse_invoice(
                             parsed["total_amount"] = fname_amt
                             print(f"[DEBUG] 文件名金额兜底: {fname_amt} (from {part!r})", flush=True)
                             break
-                    except:
+                    except (ValueError, KeyError):
                         pass
-        
+
         # 兜底：OCR文本+文件名检测出租车发票
         # 出租车发票 OCR 文字质量差，"出租"关键词常无法识别
         # 改为检测出租车特有字段：电调费、节假日附加费、里程(km)、余额等
@@ -271,7 +269,7 @@ async def parse_invoice(
             # OCR 文本特征检测
             taxi_keywords = ["\u542b\u7535\u8c03\u8d39", "\u8282\u5047\u65e5\u9644\u52a0\u8d39", "\u4f59\u989d", "\u91cc\u7a0b", "\u8ba1\u4ef7", "\u6253\u8868", "\u7535\u8c03"]
             is_taxi = any(kw in text for kw in taxi_keywords)
-        
+
         if is_taxi:
             parsed["invoice_type"] = "\u51fa\u79df\u8f66\u53d1\u7968"
             parsed["counterpart_name"] = "TAXI"
@@ -288,7 +286,7 @@ async def parse_invoice(
         if not is_railway:
             railway_keywords = ["\u94c1\u8def\u7535\u5b50\u5ba2\u7968", "\u94c1\u8def", "\u8f66\u6b21", "\u5ea7\u4f4d", "\u53d1\u8f66", "\u5230\u7ad9", "\u4e58\u8f66\u65e5\u671f"]
             is_railway = any(kw in text for kw in railway_keywords)
-        
+
         if is_railway:
             parsed["invoice_type"] = "\u94c1\u8def\u7535\u5b50\u5ba2\u7968"
             # 铁路客票销方通常是 12306 或铁路局，OCR 识别不出时设为通用值
@@ -308,7 +306,7 @@ async def parse_invoice(
                 db.commit()
                 db.refresh(counterpart)
             counterpart_id = counterpart.id
-        
+
         # 构建发票数据
         invoice_data = {
             "invoice_number": parsed.get("invoice_number") or None,  # 空字符串/None 不留 TEMP_
@@ -324,7 +322,7 @@ async def parse_invoice(
             "remark": parsed["remark"] or f"OCR识别导入，原始文件: {file.filename}",
             "details": []
         }
-        
+
         return {
             "filename": file.filename,
             "raw_text": text[:500] + "..." if len(text) > 500 else text,
@@ -337,7 +335,7 @@ async def parse_invoice(
     except Exception as e:
         print(f"[ERROR] parse_invoice: {e}", flush=True)
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"发票解析失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"发票解析失败: {e!s}") from e
     finally:
         Path(tmp_path).unlink(missing_ok=True)
 
@@ -349,8 +347,9 @@ async def import_invoice(
 ):
     """导入解析后的发票数据到数据库"""
     import traceback
+
     from sqlalchemy.exc import IntegrityError
-    
+
     try:
         # 检查是否已存在相同发票号+发票代码的发票
         existing = db.query(Invoice).filter(
@@ -362,19 +361,19 @@ async def import_invoice(
                 status_code=409,
                 detail=f"发票已存在：发票号码 {invoice_data.invoice_number}，发票代码 {invoice_data.invoice_code}"
             )
-        
+
         # 创建发票
         invoice = Invoice(**invoice_data.model_dump(exclude={"details"}))
         db.add(invoice)
-        
+
         # 添加明细
         for detail_data in invoice_data.details:
             detail = InvoiceDetail(invoice=invoice, **detail_data.model_dump())
             db.add(detail)
-        
+
         db.commit()
         db.refresh(invoice)
-        
+
         return {
             "success": True,
             "invoice_id": invoice.id,
@@ -388,8 +387,8 @@ async def import_invoice(
         raise HTTPException(
             status_code=409,
             detail=f"发票已存在（数据库约束）: {str(e.orig) if hasattr(e, 'orig') else str(e)}"
-        )
+        ) from e
     except Exception as e:
         db.rollback()
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"发票导入失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"发票导入失败: {e!s}") from e

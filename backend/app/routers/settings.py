@@ -1,17 +1,17 @@
 """系统设置 API — OCR配置 / 存储配置 / 备份 / 重置"""
 
+from datetime import datetime
 import json
+from pathlib import Path
 import shutil
 import sys
-from pathlib import Path
-from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from app.config import settings as app_settings
-from app.database import SessionLocal, engine, Base, init_db, seed_default_categories
+from app.database import Base, SessionLocal, engine, seed_default_categories
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -31,7 +31,7 @@ def _get_data_dir() -> Path:
 def _load_user_settings() -> dict:
     path = _get_data_dir() / "settings.json"
     if path.exists():
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     return {}
 
@@ -153,4 +153,4 @@ def reset_database():
         seed_default_categories()
         return {"message": "数据库已重置"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"数据库重置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"数据库重置失败: {e!s}") from e

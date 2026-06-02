@@ -7,8 +7,8 @@
 """
 
 import os
-import sys
 from pathlib import Path
+import sys
 
 
 def _is_packaged() -> bool:
@@ -201,6 +201,6 @@ def ensure_directories() -> dict:
         "templates": base / "templates",
         "runtime": base / "runtime",
     }
-    for name, d in dirs.items():
+    for _name, d in dirs.items():
         d.mkdir(parents=True, exist_ok=True)
     return dirs

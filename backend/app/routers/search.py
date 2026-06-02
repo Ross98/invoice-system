@@ -1,19 +1,18 @@
 """全局搜索 API 路由"""
 
 import re
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import or_
+from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
-from ..models.invoice import Invoice, Counterpart
+from ..models.invoice import Counterpart, Invoice
 
 router = APIRouter(prefix="/api", tags=["搜索"])
 
 
-def _highlight_snippet(text: Optional[str], keyword: str, max_len: int = 60) -> Optional[str]:
+def _highlight_snippet(text: str | None, keyword: str, max_len: int = 60) -> str | None:
     """从文本中提取包含关键词的片段，并用 <mark> 标签高亮"""
     if not text:
         return None
@@ -40,7 +39,7 @@ def _highlight_snippet(text: Optional[str], keyword: str, max_len: int = 60) -> 
     return f"{prefix}{highlighted}{suffix}"
 
 
-def _match_fields(invoice, keyword: str) -> List[dict]:
+def _match_fields(invoice, keyword: str) -> list[dict]:
     """检查发票在哪些字段上匹配关键词，返回匹配信息列表"""
     matches = []
     keyword_lower = keyword.lower()
@@ -65,15 +64,14 @@ def _match_fields(invoice, keyword: str) -> List[dict]:
             })
 
     # 对方单位名称
-    if invoice.counterpart and invoice.counterpart.name:
-        if keyword_lower in invoice.counterpart.name.lower():
-            snippet = _highlight_snippet(invoice.counterpart.name, keyword)
-            matches.append({
-                "field": "counterpart",
-                "label": "对方单位",
-                "snippet": snippet,
-                "priority": 7,
-            })
+    if invoice.counterpart and invoice.counterpart.name and keyword_lower in invoice.counterpart.name.lower():
+        snippet = _highlight_snippet(invoice.counterpart.name, keyword)
+        matches.append({
+            "field": "counterpart",
+            "label": "对方单位",
+            "snippet": snippet,
+            "priority": 7,
+        })
 
     # 按优先级降序排列
     matches.sort(key=lambda m: m["priority"], reverse=True)

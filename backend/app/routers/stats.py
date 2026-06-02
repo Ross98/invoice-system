@@ -1,23 +1,22 @@
 """统计汇总 API 路由"""
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
-from sqlalchemy import func, extract
-from typing import Optional
-from datetime import datetime, date
+from datetime import date, datetime
+
 from dateutil.relativedelta import relativedelta
-from collections import defaultdict
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models.invoice import Invoice, Category, Counterpart
+from ..models.invoice import Category, Counterpart, Invoice
 
 router = APIRouter(prefix="/api/stats", tags=["统计汇总"])
 
 
 @router.get("/dashboard")
 def get_dashboard_stats(
-    year: Optional[int] = Query(None),
-    month: Optional[int] = Query(None),
+    year: int | None = Query(None),
+    month: int | None = Query(None),
     db: Session = Depends(get_db),
 ):
     """获取仪表盘汇总数据"""
@@ -43,7 +42,7 @@ def get_dashboard_stats(
     month_tax = month_q.filter(Invoice.tax_amount.isnot(None)).with_entities(
         func.coalesce(func.sum(Invoice.tax_amount), 0)
     ).scalar() or 0
-    month_reimbursed = month_q.filter(Invoice.is_reimbursed == True).count()
+    month_reimbursed = month_q.filter(Invoice.is_reimbursed).count()
     month_pending = month_total - month_reimbursed
 
     # --- 全部累计 ---
@@ -52,7 +51,7 @@ def get_dashboard_stats(
         func.coalesce(func.sum(Invoice.total_with_tax), 0)
     ).scalar() or 0
     total_reimbursed = db.query(Invoice).filter(
-        Invoice.is_reimbursed == True
+        Invoice.is_reimbursed
     ).count()
 
     # --- 全年统计 ---

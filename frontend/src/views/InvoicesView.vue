@@ -152,21 +152,21 @@
               </v-btn>
             </div>
           </template>
-          <template v-slot:item.invoice_date="{ item }">
+          <template #item.invoice_date="{ item }">
             {{ formatDate(item.invoice_date) }}
           </template>
-          <template v-slot:item.total_with_tax="{ item }">
+          <template #item.total_with_tax="{ item }">
             <span class="font-weight-bold">¥{{ formatAmount(item.total_with_tax) }}</span>
           </template>
-          <template v-slot:item.counterpart="{ item }">
+          <template #item.counterpart="{ item }">
             {{ item.counterpart?.name || '-' }}
           </template>
-          <template v-slot:item.category="{ item }">
+          <template #item.category="{ item }">
             <v-chip size="x-small" variant="tonal" :color="item.category?.color || 'grey'">
               {{ item.category?.name || '-' }}
             </v-chip>
           </template>
-          <template v-slot:item.is_reimbursed="{ item }">
+          <template #item.is_reimbursed="{ item }">
             <v-chip
               :color="item.is_reimbursed ? 'success' : 'warning'"
               size="small"
@@ -177,7 +177,7 @@
               {{ item.is_reimbursed ? '已报销' : '未报销' }}
             </v-chip>
           </template>
-          <template v-slot:item.actions="{ item }">
+          <template #item.actions="{ item }">
             <v-btn
               icon
               variant="text"

@@ -316,7 +316,7 @@ async function loadMeta() {
   try {
     const parts = await api.get('/counterparts')
     counterpartItems.value = parts || []
-  } catch {}
+  } catch { /* counterpart fetch is optional */ }
 }
 
 function selectAll() { selectedIds.value = invoices.value.map(i => i.id) }

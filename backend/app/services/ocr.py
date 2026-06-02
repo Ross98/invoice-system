@@ -1,24 +1,23 @@
 """OCR 服务模块 - 支持本地 Tesseract 和云端 API"""
 
+import contextlib
+import os
 from pathlib import Path
-from typing import Optional
+import re
+import shutil
 import subprocess
 import tempfile
-import shutil
-import sys
-import os
-import re
 
 from ..config import settings
-from ..resource_path import get_tesseract_path as _rp_tesseract, get_poppler_path as _rp_poppler
+from ..resource_path import get_poppler_path as _rp_poppler
+from ..resource_path import get_tesseract_path as _rp_tesseract
 
 
-def _find_tesseract() -> Optional[str]:
+def _find_tesseract() -> str | None:
     """查找 tesseract 可执行文件路径（优先 resource_path 统一解析）"""
     # 1. 配置显式指定
-    if settings.TESSERACT_PATH:
-        if Path(settings.TESSERACT_PATH).exists():
-            return settings.TESSERACT_PATH
+    if settings.TESSERACT_PATH and Path(settings.TESSERACT_PATH).exists():
+        return settings.TESSERACT_PATH
     # 2. resource_path 统一解析（含打包/开发环境）
     rp = _rp_tesseract()
     if rp:
@@ -28,7 +27,7 @@ def _find_tesseract() -> Optional[str]:
     return found
 
 
-def _find_poppler() -> Optional[str]:
+def _find_poppler() -> str | None:
     """查找 poppler (pdftoppm) 所在目录（优先 resource_path 统一解析）"""
     # 1. 配置显式指定
     if settings.POPPLER_PATH:
@@ -49,27 +48,27 @@ def _find_poppler() -> Optional[str]:
 def _preprocess_image(image_path: str) -> str:
     """对图片进行预处理（灰度化、增强对比度、二值化），返回预处理后的临时文件路径"""
     from PIL import Image, ImageEnhance, ImageFilter, ImageOps
-    
+
     img = Image.open(image_path)
-    
+
     # 如果图片太小，放大到合理尺寸（至少宽度 1500px）
     w, h = img.size
     min_width = 1500
     if w < min_width:
         scale = min_width / w
         img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
-    
+
     # 转灰度
     if img.mode != 'L':
         img = img.convert('L')
-    
+
     # 增强对比度
     enhancer = ImageEnhance.Contrast(img)
     img = enhancer.enhance(2.0)
-    
+
     # 锐化
     img = img.filter(ImageFilter.SHARPEN)
-    
+
     # 自适应二值化（使用 PIL 的 threshold 方法）
     # 先获取像素直方图，使用大津法自动计算阈值
     try:
@@ -82,16 +81,16 @@ def _preprocess_image(image_path: str) -> str:
     except Exception:
         # 兜底：简单二值化
         img = img.point(lambda p: 255 if p > 127 else 0)
-    
+
     # 保存到临时文件
     fd, preprocessed_path = tempfile.mkstemp(suffix=".png")
     os.close(fd)
     img.save(preprocessed_path, "PNG")
-    
+
     return preprocessed_path
 
 
-def _run_tesseract(image_path: str, lang: str, psm: int = None) -> str:
+def _run_tesseract(image_path: str, lang: str, psm: int | None = None) -> str:
     """调用 Tesseract 执行 OCR"""
     tesseract_path = _find_tesseract()
     if not tesseract_path:
@@ -99,51 +98,49 @@ def _run_tesseract(image_path: str, lang: str, psm: int = None) -> str:
             "Tesseract 未安装或未找到。请安装 Tesseract 5.x 并添加中文语言包，"
             "或在 .env 中配置 TESSERACT_PATH。"
         )
-    
+
     fd, out_base = tempfile.mkstemp(suffix="")
     os.close(fd)
     out_path = out_base + ".txt"
-    
+
     try:
         cmd = [tesseract_path, image_path, out_base, "-l", lang]
         if psm is not None:
             cmd.extend(["--psm", str(psm)])
-        
+
         result = subprocess.run(
             cmd,
             capture_output=True, text=True, timeout=120,
         )
-        
+
         if not os.path.exists(out_path):
             stderr_msg = getattr(result, 'stderr', '').strip() or ''
             raise RuntimeError(f"OCR 输出文件未生成: {stderr_msg}")
-        
+
         output = Path(out_path).read_text(encoding="utf-8").strip()
-        
+
         if not output:
             stderr_msg = getattr(result, 'stderr', '').strip() or ''
             raise RuntimeError(f"OCR 识别无结果: {stderr_msg}")
-        
+
         return output
     finally:
         Path(out_path).unlink(missing_ok=True)
         # 清理 tesseract 可能生成的其他文件
         for f in [out_base, out_base + ".osd", out_base + ".box"]:
             if os.path.exists(f):
-                try:
+                with contextlib.suppress(OSError):
                     os.unlink(f)
-                except OSError:
-                    pass
 
 
 def ocr_image(image_path: str, lang: str = "chi_sim+eng") -> str:
     """对图片进行 OCR 识别，返回文本结果（含预处理增强）"""
-    
+
     # 尝试多种 PSM 模式，从最宽松到最优化
     psm_modes = [None, 3, 6]  # None=默认, 3=全自动, 6=统一文本块
-    
+
     last_error = None
-    
+
     for psm in psm_modes:
         try:
             # 直接 OCR（不预处理）先试一次
@@ -151,40 +148,37 @@ def ocr_image(image_path: str, lang: str = "chi_sim+eng") -> str:
         except RuntimeError as e:
             last_error = e
             continue
-    
+
     # 原始图片 OCR 全部失败，尝试预处理增强
     preprocessed_path = None
     try:
         preprocessed_path = _preprocess_image(image_path)
-        
+
         for psm in psm_modes:
             try:
                 return _run_tesseract(preprocessed_path, lang, psm)
             except RuntimeError as e:
                 last_error = e
                 continue
-        
+
         raise last_error or RuntimeError("所有 OCR 尝试均失败")
     finally:
         if preprocessed_path and os.path.exists(preprocessed_path):
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(preprocessed_path)
-            except OSError:
-                pass
 
 
 def ocr_pdf(pdf_path: str, lang: str = "chi_sim+eng") -> str:
     """对 PDF 进行 OCR 识别，先将 PDF 转为图片再 OCR"""
-    from PIL import Image
     import tempfile
-    
+
     try:
         from pdf2image import convert_from_path
     except ImportError:
         raise RuntimeError(
             "PDF OCR 需要 pdf2image 库。请运行: pip install pdf2image"
-        )
-    
+        ) from None
+
     # 先尝试 pdfplumber 直接提取文本层（对电子发票 PDF 通常有文本层）
     pdf_text = _extract_pdf_text_layer(pdf_path, "")
     if pdf_text and len(pdf_text) >= 100:
@@ -193,17 +187,19 @@ def ocr_pdf(pdf_path: str, lang: str = "chi_sim+eng") -> str:
         has_amount = bool(_re.search(r'[¥￥革]\s*\d|价税合计|票价|金额|合计', pdf_text))
         if has_keyword and has_amount:
             return pdf_text  # 文本层提取成功，直接返回
-    
+
     # pdfplumber 不足，用图片 OCR
     images = []  # List of PIL Image objects
 
     # 方法1: pdf2image + poppler（优先，质量最好）
     poppler_path = _find_poppler()
     print(f"[DEBUG] ocr_pdf: poppler_path={poppler_path!r} pdf={pdf_path!r}", flush=True)
+    pdf2image_err = None
     try:
         images = convert_from_path(pdf_path, dpi=200, poppler_path=poppler_path)
-    except Exception as e:
-        print(f"[DEBUG] convert_from_path failed: {e}, trying pypdfium2", flush=True)
+    except Exception as exc:
+        pdf2image_err = exc
+        print(f"[DEBUG] convert_from_path failed: {exc}, trying pypdfium2", flush=True)
 
     # 方法2: pypdfium2 渲染（不依赖 poppler，Windows 更可靠）
     if not images:
@@ -220,12 +216,12 @@ def ocr_pdf(pdf_path: str, lang: str = "chi_sim+eng") -> str:
                 page.close()
                 bitmap.close()
             doc.close()
-        except Exception as e2:
-            print(f"[DEBUG] pypdfium2 also failed: {e2}", flush=True)
+        except Exception as exc2:
+            print(f"[DEBUG] pypdfium2 also failed: {exc2}", flush=True)
             # 两个方法都失败，有文字层就返回文字层
             if pdf_text:
                 return pdf_text
-            raise RuntimeError(f"PDF 转图片失败: pdf2image={e}, pypdfium2={e2}")
+            raise RuntimeError(f"PDF 转图片失败: pdf2image={pdf2image_err}, pypdfium2={exc2}") from exc2
 
     texts = []
 
@@ -268,7 +264,7 @@ def _extract_pdf_text_layer(pdf_path: str, fallback_text: str = "") -> str:
 def ocr_file(file_path: str) -> str:
     """自动判断文件类型并执行 OCR"""
     ext = Path(file_path).suffix.lower()
-    
+
     if ext in (".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif"):
         return ocr_image(file_path)
     elif ext == ".pdf":
@@ -284,9 +280,9 @@ def is_available() -> bool:
 
 def parse_invoice_from_ocr(ocr_text: str) -> dict:
     """从 OCR 文本中解析发票信息（规则+LLM混合模式）"""
-    import re
     from datetime import datetime
-    
+    import re
+
     result = {
         "invoice_number": "",
         "invoice_code": "",
@@ -301,32 +297,30 @@ def parse_invoice_from_ocr(ocr_text: str) -> dict:
         "remark": "",
         "raw_text": ocr_text
     }
-    
+
     # 调试日志（使用 repr 避免 Windows GBK 编码问题）
-    try:
+    with contextlib.suppress(Exception):
         print(f"[DEBUG] OCR text length: {len(ocr_text)}", flush=True)
-    except Exception:
-        pass
-    
+
     # 1. 规则解析
     # ===== 发票号码：多策略提取 =====
     # 策略1：关键词"发票号码"后跟数字
     invoice_number_match = re.search(r'发票号码[:：]?\s*(\d{8,20})', ocr_text, re.IGNORECASE)
     if invoice_number_match:
         result["invoice_number"] = invoice_number_match.group(1)
-    
+
     # 策略2：OCR 可能把"发票号码"识别为分离的字符（如"发票 号码"、"发 票 号 码"等）
     if not result["invoice_number"]:
         inv_num_loose = re.search(r'发票\s*号\s*码\s*[:：]?\s*(\d{8,20})', ocr_text)
         if inv_num_loose:
             result["invoice_number"] = inv_num_loose.group(1)
-    
+
     # 策略3：查找"号码"关键词（有些发票格式只用"号码"）
     if not result["invoice_number"]:
         num_only = re.search(r'(?:号码|编号)\s*[:：]?\s*(\d{8,20})', ocr_text)
         if num_only:
             result["invoice_number"] = num_only.group(1)
-    
+
     # 策略4：查找 20 位数字序列 —— 电子发票的标准发票号码（含发票代码+号码，
     #   通常是 10位代码 + 8位号码 + 2位校验，或 12位代码 + 8位号码）
     #   在 OCR 文本中，这种长数字串大概率就是发票号码
@@ -339,7 +333,7 @@ def parse_invoice_from_ocr(ocr_text: str) -> dict:
             if len(set(candidate)) > 1:
                 result["invoice_number"] = candidate
                 print(f"[DEBUG] 策略4 从 18-22 位数字串提取发票号码: {candidate}", flush=True)
-    
+
     # 策略5：查找单独出现的长数字串（有些发票 OCR 后号码独立一行）
     if not result["invoice_number"]:
         standalone_nums = re.findall(r'(?:^|\n)\s*(\d{10,22})\s*(?:\n|$)', ocr_text, re.MULTILINE)
@@ -348,12 +342,12 @@ def parse_invoice_from_ocr(ocr_text: str) -> dict:
                 result["invoice_number"] = num
                 print(f"[DEBUG] 策略5 从独立行提取发票号码: {num}", flush=True)
                 break
-    
+
     # 发票代码：通常为10-12位数字
     invoice_code_match = re.search(r'发票代码[:：]?\s*(\d{10,12})', ocr_text, re.IGNORECASE)
     if invoice_code_match:
         result["invoice_code"] = invoice_code_match.group(1)
-    
+
     # 如果发票代码仍为空但发票号码有20位，则前10或12位即为代码
     if not result["invoice_code"] and result["invoice_number"] and len(result["invoice_number"]) >= 18:
         # 尝试拆分：10位代码 + 剩余为号码 / 12位代码 + 剩余为号码
@@ -362,7 +356,7 @@ def parse_invoice_from_ocr(ocr_text: str) -> dict:
                 result["invoice_code"] = result["invoice_number"][:code_len]
                 result["invoice_number"] = result["invoice_number"][code_len:]
                 break
-    
+
     # 开票日期
     date_patterns = [
         r'开票日期[:：]?\s*(\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?)',
@@ -379,9 +373,9 @@ def parse_invoice_from_ocr(ocr_text: str) -> dict:
                 dt = datetime.strptime(date_str, "%Y-%m-%d")
                 result["invoice_date"] = dt.strftime("%Y-%m-%d")
                 break
-            except:
+            except (ValueError, KeyError):
                 pass
-    
+
     # 金额相关 - 增强识别（支持更多格式）
     # 先收集所有金额，然后智能选择
     all_amounts = []
@@ -478,7 +472,7 @@ def parse_invoice_from_ocr(ocr_text: str) -> dict:
 
         # 如果有多个金额，尝试推断金额和税额
         # 先找与 total_with_tax 最接近但小于它的金额作为不含税金额
-        others = sorted(set(a for a in _candidates if a < result["total_with_tax"]), reverse=True)
+        others = sorted({a for a in _candidates if a < result["total_with_tax"]}, reverse=True)
         if others:
             result["total_amount"] = others[0]
             if len(others) >= 2:
@@ -491,21 +485,21 @@ def parse_invoice_from_ocr(ocr_text: str) -> dict:
             result["tax_amount"] = round(result["total_with_tax"] - result["total_amount"], 2)
     else:
         pass  # 未发现有效金额
-    
+
     # 销方名称（处理OCR分拆：销 售 方 名称 / 售 名称 / 销售方名称 等变体）
     seller_match = re.search(r'(?:销[售\s]*方?\s*名\s*称|售\s*名\s*称)[:：]?\s*([^\n]+)', ocr_text)
     if seller_match:
         name = seller_match.group(1).strip()
         if _is_valid_company_name(name):
             result["counterpart_name"] = name
-    
+
     # 购买方名称（同样处理OCR分拆；如果同行后面跟着"售"则截断只取购买方部分）
     buyer_match = re.search(r'(?:购[买\s]*方?\s*名\s*称|买\s*名\s*称)[:：]?\s*([^售\n]+?)(?:\s*售\s*名|\s*销|$)', ocr_text)
     if buyer_match:
         name = buyer_match.group(1).strip()
         if _is_valid_company_name(name):
             result["buyer_name"] = name
-    
+
     # 铁路电子客票特殊处理
     if "铁路电子客票" in ocr_text or "铁路" in ocr_text:
         result["invoice_type"] = "铁路电子客票"
@@ -533,15 +527,15 @@ def parse_invoice_from_ocr(ocr_text: str) -> dict:
                     result["total_with_tax"] = price
                     result["total_amount"] = round(price / 1.09, 2)  # 铁路客票税率9%
                     result["tax_amount"] = round(price - result["total_amount"], 2)
-            except:
+            except (ValueError, KeyError):
                 pass
-    
+
     # 运输服务电子发票（普通发票）特殊处理
     if "运输服务" in ocr_text or "客运服务费" in ocr_text:
         result["invoice_type"] = "运输服务电子发票"
         # 通过信用代码和公司名称的行对应关系提取名称
         _extract_transport_names(ocr_text, result)
-        
+
         # 运输服务发票：金额/税额/价税合计 三行格式
         # 匹配所有 ¥ 开头的金额
         transport_amounts = re.findall(r'[¥￥革]\s*([\d,]+\.?\d{2})', ocr_text)
@@ -559,16 +553,16 @@ def parse_invoice_from_ocr(ocr_text: str) -> dict:
                     elif len(others) == 1:
                         result["total_amount"] = others[0]
                         result["tax_amount"] = round(result["total_with_tax"] - result["total_amount"], 2)
-            except:
+            except (ValueError, KeyError):
                 pass
-    
+
     # 出租汽车发票特殊处理
     # 特征：含"出租"/"计价"/"里程"/"打表"，金额格式通常为整数或 xx.x/xx.xx
     if any(kw in ocr_text for kw in ["出租汽车", "出租车", "计价器", "里程", "打表", "出租"]):
         result["invoice_type"] = "出租车发票"
         result["counterpart_name"] = "TAXI"
         result["invoice_number"] = ""  # 出租车发票无标准发票号码
-        
+
         # 1. 优先匹配"金额"/"计价金额"/"实收"/"应付"关键词后跟的数字
         taxi_amount_patterns = [
             r'(?:金额|计价金额|实收|应付|合计|票价|费用|收费)[^0-9]{0,6}[¥￥]?\s*([\d]+\.?\d{0,2})',
@@ -585,9 +579,9 @@ def parse_invoice_from_ocr(ocr_text: str) -> dict:
                         taxi_amount = v
                         print(f"[DEBUG] 出租车金额匹配 pattern={pat!r} value={v}", flush=True)
                         break
-                except:
+                except (ValueError, KeyError):
                     pass
-        
+
         # 2. 兜底：从全文所有数字中找最合理的金额（1-999 范围，过滤掉序号/日期/编号）
         if taxi_amount is None:
             candidates = re.findall(r'(?<!\d)([\d]{1,3}\.?\d{0,2})(?!\d)', ocr_text)
@@ -597,18 +591,18 @@ def parse_invoice_from_ocr(ocr_text: str) -> dict:
                     v = float(c)
                     if 5.0 <= v <= 999:
                         plausible.append(v)
-                except:
+                except (ValueError, KeyError):
                     pass
             if plausible:
                 taxi_amount = max(plausible)
                 print(f"[DEBUG] 出租车金额兜底: {taxi_amount}", flush=True)
-        
+
         if taxi_amount is not None:
             result["total_with_tax"] = taxi_amount
             # 出租车发票无税（或按6%/9%，但通常不分项），简化处理
             result["total_amount"] = taxi_amount
             result["tax_amount"] = 0.0
-        
+
         # 出租车发票日期：有些格式为"2026-05-29"或"20260529"
         taxi_date = re.search(
             r'(?:日期[:：]?\s*)?(\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?|\d{8})',
@@ -624,27 +618,27 @@ def parse_invoice_from_ocr(ocr_text: str) -> dict:
             try:
                 from datetime import datetime as _dt
                 result["invoice_date"] = _dt.strptime(ds, "%Y-%m-%d").strftime("%Y-%m-%d")
-            except:
+            except (ValueError, KeyError):
                 pass
 
     # 校验码
     check_code_match = re.search(r'校验码[:：]?\s*([0-9a-zA-Z]{20,})', ocr_text, re.IGNORECASE)
     if check_code_match:
         result["check_code"] = check_code_match.group(1)
-    
+
     # 2. 如果关键字段缺失或置信度低，尝试 LLM 解析（TODO: 后续实现）
     # 这里先返回规则解析结果
-    
+
     return result
 
 
 # OCR 中的无效名称片段（字段标签、页眉页脚等碎片）
 _INVALID_NAME_FRAGMENTS = {"方", "息", "销", "购", "章", "制", "国", "备", "注", "信",
                            "买", "售", "价", "税", "合", "计", "出", "行", "开"}
-_INVALID_NAMES = {"方", "息", "销", "购", "章", "制", "国", "备", "注", 
+_INVALID_NAMES = {"方", "息", "销", "购", "章", "制", "国", "备", "注",
                   "信 信", "息 息", "方 方"}
 # OCR 标签前缀，在提取公司名称时去除
-_NAME_LABEL_PREFIXES = ["名称：", "名称:", "购买方名称：", "购买方名称:", 
+_NAME_LABEL_PREFIXES = ["名称：", "名称:", "购买方名称：", "购买方名称:",
                         "销售方名称：", "销售方名称:", "销方名称：", "销方名称:",
                         "统一社会信用代码：", "统一社会信用代码:", "统一社会信用代码/纳税人识别号：",
                         "统一社会信用代码/纳税人识别号:", "纳税人识别号：", "纳税人识别号:"]
@@ -673,36 +667,34 @@ def _is_valid_company_name(name: str) -> bool:
     if all(frag in _INVALID_NAME_FRAGMENTS for frag in name.split()):
         return False
     # 必须包含至少一个"公司"相关的词，或长度超过6（减少误匹配）
-    if "公司" in name or "集团" in name or "厂" in name or len(name) > 6:
-        return True
-    return False
+    return "公司" in name or "集团" in name or "厂" in name or len(name) > 6
 
 
 def _extract_transport_names(ocr_text: str, result: dict):
     """运输服务发票：通过信用代码所在行和上一行的位置对应提取名称
-    
+
     典型布局：
         南京鹏辰机器人有限公司 青岛路远信息技术有限公司南京分公司
         91320113MACKU9RJ27 91320102MADQ9WG88F
-    
+
     策略：找到信用代码所在行，从上一行按空格分割提取公司名称，
     按位置对应（第1个名称→第1个代码=购买方，第2个名称→第2个代码=销售方）
     """
     lines = ocr_text.split('\n')
-    
+
     # 找所有信用代码及其行号
     code_lines = []  # [(line_index, [code1, code2, ...])]
     for i, line in enumerate(lines):
         codes = re.findall(r'(?=.*[A-Za-z])[0-9A-HJ-NP-Z]{18}', line)
         if codes:
             code_lines.append((i, codes))
-    
+
     if not code_lines:
         return
-    
+
     # 取第一个有代码的行
     code_line_idx, codes = code_lines[0]
-    
+
     # 从代码行上方扫描（最多3行）寻找公司名称
     company_names = []
     for offset in range(1, 4):  # 向上扫描1-3行
@@ -723,7 +715,7 @@ def _extract_transport_names(ocr_text: str, result: dict):
         company_names = re.findall(r'[\u4e00-\u9fff（）()]{4,30}', prev_line)
         if company_names:
             break
-    
+
     # 按位置分配：第1个→buyer，第2个→counterpart
     # 运输服务发票中，行对应法比 regex 更可靠，直接覆盖
     if company_names and len(company_names) >= 1:
@@ -734,7 +726,7 @@ def _extract_transport_names(ocr_text: str, result: dict):
         name = _clean_company_name(company_names[1])
         if _is_valid_company_name(name):
             result["counterpart_name"] = name
-    
+
     # 回退：如果上述方法未提取到名称，尝试信用代码反向查找
     if not result.get("buyer_name") or not result.get("counterpart_name"):
         _fallback_credit_code_lookup(ocr_text, result)
@@ -748,15 +740,15 @@ def _split_into_company_names(tokens: list, expected_count: int) -> list:
     valid_tokens = [t for t in tokens if t not in _INVALID_NAME_FRAGMENTS and len(t) > 1]
     if not valid_tokens:
         return []
-    
+
     # 如果token数与预期一致，直接返回
     if len(valid_tokens) == expected_count:
         return valid_tokens
-    
+
     # 如果token数少于预期，保持不变
     if len(valid_tokens) < expected_count:
         return valid_tokens
-    
+
     # Token数多余预期：需要合并相邻的token
     # 基于公司名称特征（以有限公司/分公司/集团结尾）来合并
     names = []
@@ -803,7 +795,7 @@ def _fallback_credit_code_lookup(ocr_text: str, result: dict):
                             result["counterpart_name"] = name
                         break
             continue
-        
+
         name_match = re.search(r'([\u4e00-\u9fff（）()]{4,30})\s*$', preceding)
         if name_match:
             name = name_match.group(1).strip()
