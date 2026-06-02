@@ -380,22 +380,7 @@ const onKeyDown = (e) => {
     return
   }
 
-  // Ctrl+N — 快速新建发票
-  if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
-    e.preventDefault()
-    router.push('/invoices/new')
-    return
   }
-
-  // Esc — 关闭弹窗/搜索/抽屉
-  if (e.key === 'Escape') {
-    if (searchDialog.value) {
-      searchDialog.value = false
-    } else if (drawer.value) {
-      drawer.value = false
-    }
-  }
-}
 
 // 注册/移除全局快捷键
 onMounted(() => {
