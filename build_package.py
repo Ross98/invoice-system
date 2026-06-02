@@ -210,10 +210,10 @@ def step5_create_archive():
     
     if result.returncode == 0 and zip_path.exists():
         size_mb = zip_path.stat().st_size / (1024 * 1024)
-        print(f"\n  ✅ 压缩包已创建: {zip_path}")
-        print(f"  📦 大小: {size_mb:.1f} MB")
+        print(f"\n  [OK] 压缩包已创建: {zip_path}")
+        print(f"   大小: {size_mb:.1f} MB")
     else:
-        print(f"  ⚠️ PowerShell 压缩失败: {result.stderr}")
+        print(f"  [WARN] PowerShell 压缩失败: {result.stderr}")
         print(f"  手动压缩目录: {PACKAGE_DIR}")
     
     return True
@@ -236,18 +236,18 @@ def main():
         try:
             ok = func()
             if not ok and required:
-                print(f"\n❌ 步骤 '{name}' 失败，构建中止")
+                print(f"\n[ERR] 步骤 '{name}' 失败，构建中止")
                 sys.exit(1)
             elif not ok:
-                print(f"  ⚠️ 步骤 '{name}' 跳过（非必需）")
+                print(f"  [WARN] 步骤 '{name}' 跳过（非必需）")
         except Exception as e:
             if required:
-                print(f"\n❌ 步骤 '{name}' 异常: {e}")
+                print(f"\n[ERR] 步骤 '{name}' 异常: {e}")
                 sys.exit(1)
-            print(f"  ⚠️ 步骤 '{name}' 异常（非必需）: {e}")
+            print(f"  [WARN] 步骤 '{name}' 异常（非必需）: {e}")
     
     print(f"\n{'='*60}")
-    print(f"  ✅ 打包完成!")
+    print(f"  [OK] 打包完成!")
     print(f"  输出目录: {PACKAGE_DIR}")
     print(f"  压缩包: {DIST_DIR / PACKAGE_NAME}.zip")
     print(f"{'='*60}")
