@@ -171,14 +171,16 @@
           </template>
         </v-breadcrumbs>
 
-        <router-view />
+        <v-slide-x-transition mode="out-in">
+          <router-view />
+        </v-slide-x-transition>
       </v-container>
     </v-main>
 
     <!-- 底部信息 -->
     <v-footer app color="primary" dark height="36">
       <v-spacer />
-      <span class="text-caption">&copy; 2026 发票管理系统 v1.0.1</span>
+      <span class="text-caption">&copy; 2026 发票管理系统 v2.0.0</span>
       <v-spacer />
     </v-footer>
 
@@ -361,16 +363,37 @@ const debouncedSearch = () => {
   }, 300)
 }
 
-// Ctrl+K 全局快捷键
+// 全局快捷键
 const onKeyDown = (e) => {
+  // 跳过输入框内的按键
+  const tag = e.target.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+
+  // Ctrl+K — 打开搜索
   if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
     e.preventDefault()
     searchDialog.value = true
-    // 聚焦到搜索对话框
     setTimeout(() => {
       const input = document.querySelector('.v-dialog .v-field__input input')
       if (input) input.focus()
     }, 100)
+    return
+  }
+
+  // Ctrl+N — 快速新建发票
+  if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+    e.preventDefault()
+    router.push('/invoices/new')
+    return
+  }
+
+  // Esc — 关闭弹窗/搜索/抽屉
+  if (e.key === 'Escape') {
+    if (searchDialog.value) {
+      searchDialog.value = false
+    } else if (drawer.value) {
+      drawer.value = false
+    }
   }
 }
 

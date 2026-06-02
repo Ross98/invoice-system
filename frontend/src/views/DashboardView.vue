@@ -7,6 +7,34 @@
       <span class="text-caption text-medium-emphasis">{{ currentMonthLabel }}</span>
     </div>
 
+    <!-- 加载骨架屏 -->
+    <template v-if="loading">
+      <v-row class="mb-6">
+        <v-col v-for="n in 4" :key="n" cols="12" sm="6" lg="3">
+          <v-skeleton-loader type="card" />
+        </v-col>
+      </v-row>
+      <v-row class="mb-6">
+        <v-col cols="12" lg="4">
+          <v-skeleton-loader type="card" height="200" />
+        </v-col>
+        <v-col cols="12" lg="8">
+          <v-skeleton-loader type="card" height="200" />
+        </v-col>
+      </v-row>
+      <v-row class="mb-6">
+        <v-col cols="12" md="7">
+          <v-skeleton-loader type="card" height="280" />
+        </v-col>
+        <v-col cols="12" md="5">
+          <v-skeleton-loader type="card" height="280" />
+        </v-col>
+      </v-row>
+    </template>
+
+    <!-- 正常内容 -->
+    <template v-else>
+
     <!-- 统计卡片 -->
     <v-row class="mb-6">
       <v-col cols="12" sm="6" lg="3">
@@ -289,6 +317,7 @@
         </div>
       </v-card-text>
     </v-card>
+    </template>
   </div>
 </template>
 
@@ -296,6 +325,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { statsApi } from '@/api'
 
+const loading = ref(true)
 const stats = ref({
   month: { year: 0, month: 0, total_count: 0, total_amount: 0, total_tax: 0, reimbursed_count: 0, pending_count: 0 },
   overall: { total_count: 0, total_amount: 0, total_reimbursed: 0 },
@@ -364,6 +394,8 @@ onMounted(async () => {
     stats.value = data
   } catch (err) {
     console.error('加载仪表盘数据失败:', err)
+  } finally {
+    loading.value = false
   }
 })
 </script>

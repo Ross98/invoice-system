@@ -13,7 +13,7 @@
             <v-list>
               <v-list-item>
                 <v-list-item-title>版本</v-list-item-title>
-                <v-list-item-subtitle>v1.0.0</v-list-item-subtitle>
+                <v-list-item-subtitle>v2.0.0</v-list-item-subtitle>
               </v-list-item>
               <v-list-item>
                 <v-list-item-title>构建日期</v-list-item-title>
@@ -208,15 +208,15 @@
             <v-list>
               <v-list-item>
                 <v-list-item-title>GitHub 仓库</v-list-item-title>
-                <v-list-item-subtitle>https://github.com/your-username/invoice-management-system</v-list-item-subtitle>
+                <v-list-item-subtitle>https://github.com/Ross98/invoice-system</v-list-item-subtitle>
               </v-list-item>
               <v-list-item>
                 <v-list-item-title>问题反馈</v-list-item-title>
-                <v-list-item-subtitle>issues@example.com</v-list-item-subtitle>
+                <v-list-item-subtitle>aka_chuanfengdada@qq.com</v-list-item-subtitle>
               </v-list-item>
               <v-list-item>
                 <v-list-item-title>文档</v-list-item-title>
-                <v-list-item-subtitle>https://docs.example.com/invoice-system</v-list-item-subtitle>
+                <v-list-item-subtitle>https://github.com/Ross98/invoice-system/blob/V2.0/docs/UX-ARCHITECTURE.md</v-list-item-subtitle>
               </v-list-item>
             </v-list>
           </v-card-text>

@@ -47,10 +47,21 @@
       </v-card-title>
     </v-card>
 
-    <!-- 加载-->
-    <div v-if="!invoice" class="text-center py-8">
-      <v-progress-circular indeterminate color="primary" size="48"></v-progress-circular>
-      <div class="mt-3">正在加载...</div>
+    <!-- 加载骨架屏 -->
+    <div v-if="!invoice">
+      <div class="text-center py-3 mb-2">
+        <v-progress-linear indeterminate color="primary" />
+      </div>
+      <v-row>
+        <v-col cols="12" md="8">
+          <v-skeleton-loader type="table" />
+        </v-col>
+        <v-col cols="12" md="4">
+          <v-skeleton-loader type="card" class="mb-3" />
+          <v-skeleton-loader type="card" class="mb-3" />
+          <v-skeleton-loader type="card" />
+        </v-col>
+      </v-row>
     </div>
 
     <template v-else>

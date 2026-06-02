@@ -138,6 +138,20 @@
           @update:page="onPageChange"
           @update:items-per-page="onPageSizeChange"
         >
+          <template #no-data>
+            <div class="text-center py-8">
+              <v-icon size="48" color="grey-lighten-1">mdi-receipt-text-outline</v-icon>
+              <div class="text-body-1 mt-2 text-medium-emphasis">暂无发票记录</div>
+              <v-btn
+                variant="text"
+                color="primary"
+                class="mt-2"
+                @click="$router.push('/invoices/new')"
+              >
+                创建第一张发票
+              </v-btn>
+            </div>
+          </template>
           <template v-slot:item.invoice_date="{ item }">
             {{ formatDate(item.invoice_date) }}
           </template>

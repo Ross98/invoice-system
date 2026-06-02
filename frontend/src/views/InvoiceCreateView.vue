@@ -7,6 +7,14 @@
       <span class="text-h5 ml-2">新建发票</span>
     </v-card-title>
 
+    <!-- 全局反馈 -->
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3500" location="top">
+      {{ snackbar.message }}
+      <template #actions>
+        <v-btn variant="text" @click="snackbar.show = false">关闭</v-btn>
+      </template>
+    </v-snackbar>
+
     <!-- 统一 Tab: 智能识别 / 手动录入 -->
     <v-tabs v-model="activeTab" class="px-4" color="primary">
       <v-tab value="ocr">
@@ -244,12 +252,13 @@
 
         <!-- ===== Tab 2: 手动录入 ===== -->
         <v-tabs-window-item value="manual">
-          <v-form ref="manualFormRef" @submit.prevent="submitManual">
+          <v-form ref="manualFormRef" @submit.prevent="submitManual" validate-on="blur lazy">
             <v-row>
               <v-col cols="12" md="6">
                 <v-text-field
                   v-model="manualForm.invoice_number"
                   label="发票号码 *"
+                  :rules="[rules.required]"
                   required
                   variant="outlined"
                   density="compact"
@@ -259,6 +268,7 @@
                 <v-text-field
                   v-model="manualForm.invoice_code"
                   label="发票代码 *"
+                  :rules="[rules.required]"
                   required
                   variant="outlined"
                   density="compact"
@@ -271,6 +281,7 @@
                   v-model="manualForm.invoice_type"
                   label="发票类型 *"
                   :items="invoiceTypes"
+                  :rules="[rules.required]"
                   required
                   variant="outlined"
                   density="compact"
@@ -281,6 +292,7 @@
                   v-model="manualForm.invoice_date"
                   label="开票日期 *"
                   type="date"
+                  :rules="[rules.required]"
                   required
                   variant="outlined"
                   density="compact"
@@ -528,6 +540,22 @@ const categories = ref([])
 const counterparts = ref([])
 const invoiceTypes = ['增值税专票', '增值税普票', '电子发票']
 
+// 表单校验规则
+const rules = {
+  required: (v) => !!v || '此字段为必填项',
+  number: (v) => !v || !isNaN(v) || '请输入有效数字',
+  positiveNumber: (v) => !v || parseFloat(v) > 0 || '必须大于0'
+}
+
+// 全局反馈
+const snackbar = reactive({ show: false, message: '', color: 'success' })
+
+const showSnackbar = (message, color = 'success') => {
+  snackbar.message = message
+  snackbar.color = color
+  snackbar.show = true
+}
+
 const manualForm = reactive({
   invoice_number: '',
   invoice_code: '',
@@ -702,8 +730,15 @@ const removeManualDetail = (index) => {
 }
 
 const submitManual = async () => {
-  if (!manualForm.invoice_number || !manualForm.invoice_type || !manualForm.invoice_date) {
-    alert('请填写必填字段（发票号码 / 类型 / 日期）')
+  // v-form 校验
+  const { valid, errors } = await manualFormRef.value.validate()
+  if (!valid) {
+    showSnackbar('请修正表单中的错误', 'error')
+    // 聚焦第一个错误字段
+    setTimeout(() => {
+      const firstError = document.querySelector('.v-input--error input, .v-input--error .v-field__input')
+      if (firstError) firstError.focus()
+    }, 100)
     return
   }
 
@@ -734,10 +769,11 @@ const submitManual = async () => {
     }
 
     const invoice = await invoiceStore.createInvoice(data)
-    router.push(`/invoices/${invoice.id}`)
+    showSnackbar(`发票 ${invoice.invoice_number} 创建成功`, 'success')
+    setTimeout(() => router.push(`/invoices/${invoice.id}`), 800)
   } catch (error) {
     console.error('创建发票失败:', error)
-    alert('创建失败: ' + (error.message || '未知错误'))
+    showSnackbar('创建失败: ' + (error.message || '未知错误'), 'error')
   } finally {
     manualSubmitting.value = false
   }

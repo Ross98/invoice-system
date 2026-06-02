@@ -4,6 +4,7 @@
     <div class="d-flex align-center mb-4">
       <h2 class="text-h4 font-weight-bold">报销报表</h2>
       <v-spacer />
+      <v-progress-linear v-if="loading" indeterminate color="primary" class="flex-grow-0 mx-4" style="max-width: 200px" />
       <v-btn
         variant="tonal"
         color="primary"
@@ -185,6 +186,7 @@ const stats = ref({
 })
 
 const exportLoading = ref(false)
+const loading = ref(true)
 const now = new Date()
 const currentYear = computed(() => stats.value.month.year || now.getFullYear())
 
@@ -226,6 +228,8 @@ onMounted(async () => {
     stats.value = data
   } catch (err) {
     console.error('加载报销数据失败:', err)
+  } finally {
+    loading.value = false
   }
 })
 </script>

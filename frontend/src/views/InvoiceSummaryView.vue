@@ -4,6 +4,7 @@
     <div class="d-flex align-center mb-4">
       <h2 class="text-h4 font-weight-bold">发票汇总</h2>
       <v-spacer />
+      <v-progress-linear v-if="loading" indeterminate color="primary" class="flex-grow-0 mx-4" style="max-width: 200px" />
       <v-btn
         color="primary"
         variant="tonal"
