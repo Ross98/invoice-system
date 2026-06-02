@@ -1,0 +1,7 @@
+{
+  "ocr_lang": "chi_sim+eng",
+  "tesseract_path": "",
+  "use_cloud_ocr": false,
+  "cloud_api_key": "",
+  "cloud_provider": "baidu"
+}

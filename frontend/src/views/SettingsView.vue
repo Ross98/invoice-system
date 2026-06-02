@@ -12,9 +12,6 @@
     <v-row>
       <v-col cols="12" md="6">
         <v-card :loading="savingOcr">
-          <template #loader>
-            <v-progress-linear indeterminate color="primary" />
-          </template>
           <v-card-title class="d-flex align-center">
             <v-icon class="mr-2">mdi-text-recognition</v-icon>
             OCR 设置
@@ -89,9 +86,6 @@
       <!-- 存储设置 -->
       <v-col cols="12" md="6">
         <v-card :loading="savingStorage">
-          <template #loader>
-            <v-progress-linear indeterminate color="primary" />
-          </template>
           <v-card-title class="d-flex align-center">
             <v-icon class="mr-2">mdi-folder-cog</v-icon>
             文件存储设置
