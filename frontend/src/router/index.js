@@ -5,7 +5,7 @@ const routes = [
   {
     path: '/',
     name: 'Dashboard',
-    component: () => import('@/views/HomeView.vue'),
+    component: () => import('@/views/DashboardView.vue'),
     meta: { title: '工作台', icon: 'mdi-view-dashboard', group: 'dashboard' }
   },
 
@@ -24,7 +24,7 @@ const routes = [
       {
         path: 'new',
         name: 'InvoiceCreate',
-        component: () => import('@/views/NewInvoiceView.vue'),
+        component: () => import('@/views/InvoiceCreateView.vue'),
         meta: { title: '新建发票' }
       },
       {

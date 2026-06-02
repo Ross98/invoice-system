@@ -183,4 +183,11 @@ export const counterpartApi = {
   }
 }
 
+// 统计汇总 API
+export const statsApi = {
+  getDashboard(year, month) {
+    return api.get('/stats/dashboard', { params: { year, month } })
+  }
+}
+
 export default api

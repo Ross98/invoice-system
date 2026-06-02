@@ -4,6 +4,27 @@
       <v-app-bar-nav-icon @click="drawer = !drawer" />
       <v-toolbar-title>发票管理系统</v-toolbar-title>
       <v-spacer />
+      <!-- 全局搜索 -->
+      <v-text-field
+        ref="searchField"
+        v-model="globalSearchQuery"
+        prepend-inner-icon="mdi-magnify"
+        placeholder="搜索发票…"
+        variant="solo-filled"
+        density="compact"
+        hide-details
+        single-line
+        flat
+        class="global-search-field mx-4"
+        @keyup.enter="openSearchDialog"
+        @focus="searchFocused = true"
+        @blur="searchFocused = false"
+      >
+        <template #append-inner>
+          <kbd class="search-shortcut" v-if="!searchFocused">Ctrl+K</kbd>
+        </template>
+      </v-text-field>
+      <v-spacer />
       <v-btn icon @click="toggleTheme">
         <v-icon>{{ themeIcon }}</v-icon>
       </v-btn>
@@ -160,17 +181,81 @@
       <span class="text-caption">&copy; 2026 发票管理系统 v1.0.1</span>
       <v-spacer />
     </v-footer>
+
+    <!-- 全局搜索对话框 -->
+    <v-dialog v-model="searchDialog" max-width="600">
+      <v-card>
+        <v-card-text class="pa-4">
+          <v-text-field
+            v-model="searchDialogQuery"
+            placeholder="输入发票号码 / 单位名称 / 备注关键词…"
+            prepend-inner-icon="mdi-magnify"
+            variant="outlined"
+            density="compact"
+            hide-details
+            autofocus
+            clearable
+            :loading="searchLoading"
+            @keyup.enter="performSearch"
+            @update:model-value="debouncedSearch"
+          >
+            <template #append-inner>
+              <v-btn variant="text" size="small" @click="searchDialog = false" icon="mdi-close" />
+            </template>
+          </v-text-field>
+        </v-card-text>
+
+        <v-divider></v-divider>
+
+        <!-- 搜索结果 -->
+        <v-list v-if="searchResults.length > 0" lines="two" max-height="400" class="overflow-y-auto">
+          <v-list-item
+            v-for="item in searchResults"
+            :key="item.id"
+            :to="`/invoices/${item.id}`"
+            @click="searchDialog = false"
+          >
+            <template v-slot:prepend>
+              <v-icon color="primary">mdi-receipt</v-icon>
+            </template>
+            <v-list-item-title class="text-body-2">
+              {{ item.invoice_number }}
+              <v-chip size="x-small" class="ml-2" variant="tonal" :color="item.is_reimbursed ? 'success' : 'warning'">
+                {{ item.is_reimbursed ? '已报销' : '未报销' }}
+              </v-chip>
+            </v-list-item-title>
+            <v-list-item-subtitle class="text-caption">
+              {{ item.invoice_type }} · ¥{{ fmt(item.total_with_tax) }}
+              &nbsp;|&nbsp; {{ item.counterpart?.name || '未知单位' }}
+            </v-list-item-subtitle>
+          </v-list-item>
+        </v-list>
+
+        <div v-else-if="searchDialogQuery && !searchLoading" class="text-center py-6">
+          <v-icon size="40" color="grey">mdi-file-search-outline</v-icon>
+          <div class="text-body-2 mt-2 text-grey">未找到匹配的发票</div>
+        </div>
+
+        <div v-else-if="!searchDialogQuery" class="text-center py-6">
+          <v-icon size="40" color="grey-lighten-1">mdi-magnify</v-icon>
+          <div class="text-body-2 mt-2 text-grey">输入关键词搜索发票</div>
+          <div class="text-caption text-grey mt-1">支持发票号码 / 单位名称 / 备注</div>
+        </div>
+      </v-card>
+    </v-dialog>
   </v-app>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useTheme } from 'vuetify'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { invoiceApi } from '@/api'
 
 const drawer = ref(false)
 const theme = useTheme()
 const route = useRoute()
+const router = useRouter()
 
 // ── 主题切换 ──
 const themeIcon = computed(() =>
@@ -226,6 +311,76 @@ const breadcrumbs = computed(() => {
   }
   return items
 })
+
+// ── 全局搜索 ──
+const searchField = ref(null)
+const globalSearchQuery = ref('')
+const searchFocused = ref(false)
+const searchDialog = ref(false)
+const searchDialogQuery = ref('')
+const searchResults = ref([])
+const searchLoading = ref(false)
+const searchTimer = ref(null)
+
+const fmt = (v) => (v != null) ? Number(v).toFixed(2) : '0.00'
+
+const openSearchDialog = () => {
+  searchDialogQuery.value = globalSearchQuery.value
+  searchDialog.value = true
+  if (searchDialogQuery.value) performSearch()
+}
+
+const performSearch = async () => {
+  if (!searchDialogQuery.value.trim()) {
+    searchResults.value = []
+    return
+  }
+  searchLoading.value = true
+  try {
+    const result = await invoiceApi.getInvoices({
+      search_text: searchDialogQuery.value.trim(),
+      limit: 20
+    })
+    searchResults.value = result.items || result
+  } catch (e) {
+    console.error('搜索失败:', e)
+    searchResults.value = []
+  } finally {
+    searchLoading.value = false
+  }
+}
+
+const debouncedSearch = () => {
+  clearTimeout(searchTimer.value)
+  searchTimer.value = setTimeout(() => {
+    if (searchDialogQuery.value.trim()) {
+      performSearch()
+    } else {
+      searchResults.value = []
+    }
+  }, 300)
+}
+
+// Ctrl+K 全局快捷键
+const onKeyDown = (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault()
+    searchDialog.value = true
+    // 聚焦到搜索对话框
+    setTimeout(() => {
+      const input = document.querySelector('.v-dialog .v-field__input input')
+      if (input) input.focus()
+    }, 100)
+  }
+}
+
+// 注册/移除全局快捷键
+onMounted(() => {
+  window.addEventListener('keydown', onKeyDown)
+})
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeyDown)
+})
 </script>
 
 <style>
@@ -236,5 +391,19 @@ const breadcrumbs = computed(() => {
 /* 子导航组缩进动画 */
 .nav-sub-group {
   overflow: hidden;
+}
+
+/* 全局搜索 */
+.global-search-field {
+  max-width: 300px;
+}
+.search-shortcut {
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-family: monospace;
+  color: rgba(255,255,255,0.7);
 }
 </style>
