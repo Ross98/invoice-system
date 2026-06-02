@@ -190,6 +190,13 @@ export const statsApi = {
   }
 }
 
+// 全局搜索 API
+export const searchApi = {
+  search(query, limit = 20) {
+    return api.get('/search', { params: { q: query, limit } })
+  }
+}
+
 // 系统设置 API
 export const settingsApi = {
   getSettings() {

@@ -91,11 +91,16 @@ def list_invoices(
         query = query.filter(Invoice.category_id == category_id)
     if search_text:
         escaped = search_text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        # JOIN counterpart 以支持按单位名称搜索
+        query = query.outerjoin(Counterpart, Invoice.counterpart_id == Counterpart.id)
         query = query.filter(
             or_(
                 Invoice.invoice_number.like(f"%{escaped}%", escape="\\"),
                 Invoice.invoice_code.like(f"%{escaped}%", escape="\\"),
                 Invoice.remark.like(f"%{escaped}%", escape="\\"),
+                Invoice.raw_text.like(f"%{escaped}%", escape="\\"),
+                Invoice.check_code.like(f"%{escaped}%", escape="\\"),
+                Counterpart.name.like(f"%{escaped}%", escape="\\"),
             )
         )
     

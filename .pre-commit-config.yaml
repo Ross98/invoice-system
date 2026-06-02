@@ -1,0 +1,95 @@
+# Pre-commit hooks — Invoice System v2.0
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # ============= 通用检查 =============
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        name: 去除行尾空格
+      - id: end-of-file-fixer
+        name: 文件末尾换行
+      - id: check-yaml
+        name: YAML 语法检查
+      - id: check-json
+        name: JSON 语法检查
+      - id: check-toml
+        name: TOML 语法检查
+      - id: check-merge-conflict
+        name: 检查合并冲突标记
+      - id: mixed-line-ending
+        name: 统一换行符为 LF
+        args: ["--fix=lf"]
+      - id: detect-private-key
+        name: 检查私钥泄露
+
+  # ============= 调试语句检查 =============
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: debug-statements
+        name: 检查 Python debug 语句（breakpoint/pdb）
+      - id: check-added-large-files
+        name: 检查大文件（>500KB）
+        args: ["--maxkb=500"]
+
+  # ============= Python: Ruff Lint =============
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.0
+    hooks:
+      - id: ruff
+        name: Ruff Lint 检查
+        args: ["check", "--fix"]
+        files: ^backend/
+
+  # ============= Python: Ruff Format =============
+      - id: ruff-format
+        name: Ruff 格式化
+        files: ^backend/
+
+  # ============= Python: 自定义调试日志检查 =============
+  - repo: local
+    hooks:
+      - id: forbid-print
+        name: 禁止 print() 调试语句
+        entry: 'print\('
+        language: pygrep
+        types: [python]
+        exclude: "^(backend/app/routers/|backend/app/services/|backend/app/models/|backend/app/schemas/|backend/app/.*\\.py)"
+        # 排除文件列表为空，意味着检查所有 Python 文件
+        # 如需豁免特定文件，添加到 exclude 中
+
+  # ============= 前端: ESLint =============
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v9.24.0
+    hooks:
+      - id: eslint
+        name: ESLint 检查
+        files: ^frontend/src/.*\.(vue|js|cjs|mjs)$
+        types: [file]
+        additional_dependencies:
+          - eslint@9.24.0
+          - eslint-plugin-vue@9.33.0
+          - "@eslint/js@9.24.0"
+        args: ["--fix"]
+
+  # ============= 前端: Prettier =============
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.5.3
+    hooks:
+      - id: prettier
+        name: Prettier 格式化
+        files: ^frontend/src/.*\.(vue|js|cjs|mjs|css|scss|json)$
+        types: [file]
+
+  # ============= 前端: 禁止 console.log =============
+  - repo: local
+    hooks:
+      - id: forbid-console-log
+        name: 禁止 console.log() 调试语句
+        entry: 'console\.log\('
+        language: pygrep
+        types: [javascript]
+        files: ^frontend/src/

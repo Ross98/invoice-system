@@ -190,7 +190,7 @@
         <v-card-text class="pa-4">
           <v-text-field
             v-model="searchDialogQuery"
-            placeholder="输入发票号码 / 单位名称 / 备注关键词…"
+            placeholder="输入发票号码 / 单位名称 / 备注 / OCR原文关键词…"
             prepend-inner-icon="mdi-magnify"
             variant="outlined"
             density="compact"
@@ -210,7 +210,7 @@
         <v-divider></v-divider>
 
         <!-- 搜索结果 -->
-        <v-list v-if="searchResults.length > 0" lines="two" max-height="400" class="overflow-y-auto">
+        <v-list v-if="searchResults.length > 0" lines="three" max-height="450" class="overflow-y-auto">
           <v-list-item
             v-for="item in searchResults"
             :key="item.id"
@@ -226,10 +226,26 @@
                 {{ item.is_reimbursed ? '已报销' : '未报销' }}
               </v-chip>
             </v-list-item-title>
-            <v-list-item-subtitle class="text-caption">
+            <v-list-item-subtitle class="text-caption mb-1">
               {{ item.invoice_type }} · ¥{{ fmt(item.total_with_tax) }}
               &nbsp;|&nbsp; {{ item.counterpart?.name || '未知单位' }}
             </v-list-item-subtitle>
+            <!-- 匹配字段标签 + 高亮片段 -->
+            <div v-if="item.matches?.length" class="mt-1">
+              <div
+                v-for="(m, mi) in item.matches"
+                :key="mi"
+                class="d-flex align-start text-caption ga-1 mb-1"
+              >
+                <v-chip size="x-small" variant="flat" :color="matchColor(m.field)" class="mr-1 flex-shrink-0">
+                  {{ m.label }}
+                </v-chip>
+                <span
+                  class="text-grey-darken-1 match-snippet"
+                  v-html="m.snippet"
+                ></span>
+              </div>
+            </div>
           </v-list-item>
         </v-list>
 
@@ -241,7 +257,7 @@
         <div v-else-if="!searchDialogQuery" class="text-center py-6">
           <v-icon size="40" color="grey-lighten-1">mdi-magnify</v-icon>
           <div class="text-body-2 mt-2 text-grey">输入关键词搜索发票</div>
-          <div class="text-caption text-grey mt-1">支持发票号码 / 单位名称 / 备注</div>
+          <div class="text-caption text-grey mt-1">支持发票号码 / 单位名称 / 备注 / OCR原文</div>
         </div>
       </v-card>
     </v-dialog>
@@ -252,7 +268,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useTheme } from 'vuetify'
 import { useRoute, useRouter } from 'vue-router'
-import { invoiceApi } from '@/api'
+import { invoiceApi, searchApi } from '@/api'
 
 const drawer = ref(false)
 const theme = useTheme()
@@ -326,6 +342,19 @@ const searchTimer = ref(null)
 
 const fmt = (v) => (v != null) ? Number(v).toFixed(2) : '0.00'
 
+// 匹配字段显示颜色
+const matchColor = (field) => {
+  const map = {
+    invoice_number: 'primary',
+    invoice_code: 'indigo',
+    check_code: 'teal',
+    counterpart: 'orange',
+    remark: 'purple',
+    raw_text: 'blue-grey',
+  }
+  return map[field] || 'grey'
+}
+
 const openSearchDialog = () => {
   searchDialogQuery.value = globalSearchQuery.value
   searchDialog.value = true
@@ -339,11 +368,11 @@ const performSearch = async () => {
   }
   searchLoading.value = true
   try {
-    const result = await invoiceApi.getInvoices({
-      search_text: searchDialogQuery.value.trim(),
-      limit: 20
-    })
-    searchResults.value = result.items || result
+    const result = await searchApi.search(
+      searchDialogQuery.value.trim(),
+      20
+    )
+    searchResults.value = result.items || []
   } catch (e) {
     console.error('搜索失败:', e)
     searchResults.value = []
@@ -413,5 +442,19 @@ onUnmounted(() => {
   font-size: 11px;
   font-family: monospace;
   color: rgba(255,255,255,0.7);
+}
+
+/* 搜索结果高亮 */
+.match-snippet {
+  line-height: 1.5;
+  font-size: 11px;
+  word-break: break-all;
+}
+.match-snippet :deep(mark) {
+  background: #FFF176;
+  color: #333;
+  padding: 0 2px;
+  border-radius: 2px;
+  font-weight: 500;
 }
 </style>

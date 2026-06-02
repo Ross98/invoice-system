@@ -1,0 +1,58 @@
+# Ruff configuration — Invoice System v2.0
+# See: https://docs.astral.sh/ruff/configuration/
+
+target-version = "py313"
+
+# 允许每行最多 120 字符
+line-length = 120
+
+# 需要检查的目录
+src = ["backend/app", "backend"]
+
+# 排除目录
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "node_modules",
+    "backend/frontend_dist",
+    "backend/dist",
+    "backend/build",
+]
+
+# ---------- Lint 规则 ----------
+[lint]
+select = [
+    "F",     # Pyflakes: 未使用导入、未定义变量等
+    "E",     # pycodestyle Error: PEP 8 语法错误
+    "W",     # pycodestyle Warning: PEP 8 风格警告
+    "I",     # isort: 导入排序
+    "B",     # flake8-bugbear: 常见 bug 模式
+    "SIM",   # flake8-simplify: 代码简化
+    "C4",    # flake8-comprehensions: 推导式优化
+    "UP",    # pyupgrade: 现代 Python 语法
+    "RUF",   # Ruff 特有规则
+]
+
+ignore = [
+    "E501",  # 行长度由 formatter 处理，不在 lint 中报错
+    "B008",  # FastAPI Depends() 模式需要函数调用作为默认参数，豁免
+    "SIM108", # 三元表达式 vs if-else 赋值的建议，非强制
+]
+
+# ---------- Format 规则 ----------
+[format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+# ---------- isort 配置 ----------
+[lint.isort]
+known-first-party = ["app"]
+force-sort-within-sections = true
+
+# ---------- 针对特定文件/目录的规则覆盖 ----------
+[lint.per-file-ignores]
+"backend/app/database.py" = ["F401"]      # 允许 __all__ 导入
+"backend/app/models/__init__.py" = ["F401"] # 允许空 init 导入
