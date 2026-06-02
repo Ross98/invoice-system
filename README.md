@@ -2,7 +2,7 @@
 
 基于 OCR 的发票识别与报销管理工具，支持电子发票、出租车票、火车票的自动识别、分类汇总和 Excel 导出。
 
-> **最新版本**: [v2.0.0](https://github.com/Ross98/invoice-system/releases/tag/v2.0.0) — 全局搜索增强 + 代码审查体系
+> **最新版本**: [v2.0.1](https://github.com/Ross98/invoice-system/releases/tag/v2.0.1) — BUG 修复版本
 
 ## 技术栈
 
