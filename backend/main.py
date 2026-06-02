@@ -10,7 +10,7 @@ from pathlib import Path
 from app.config import settings
 from app.database import init_db, seed_default_categories
 from app.resource_path import get_frontend_dir, get_base_dir
-from app.routers import invoices, ocr, stats
+from app.routers import invoices, ocr, stats, settings as settings_router
 
 
 def _init_app():
@@ -54,6 +54,7 @@ app.add_middleware(
 app.include_router(invoices.router)
 app.include_router(ocr.router)
 app.include_router(stats.router)
+app.include_router(settings_router.router)
 
 # 挂载上传文件目录
 uploads_dir = Path(settings.upload_dir_path)

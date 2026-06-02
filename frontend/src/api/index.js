@@ -190,4 +190,27 @@ export const statsApi = {
   }
 }
 
+// 系统设置 API
+export const settingsApi = {
+  getSettings() {
+    return api.get('/settings')
+  },
+
+  saveOcrSettings(data) {
+    return api.put('/settings/ocr', data)
+  },
+
+  saveStorageSettings(data) {
+    return api.put('/settings/storage', data)
+  },
+
+  backupDatabase() {
+    return api.post('/settings/backup', {}, { responseType: 'blob' })
+  },
+
+  resetDatabase() {
+    return api.post('/settings/reset')
+  }
+}
+
 export default api
