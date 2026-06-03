@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import TypeVar
+from typing import Generic, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -156,6 +156,6 @@ class InvoiceFilter(BaseModel):
 # 分页响应 Schema
 T = TypeVar("T")
 
-class PaginatedResponse(BaseModel[T]):
+class PaginatedResponse(BaseModel, Generic[T]):
     items: list[T]
     total: int
