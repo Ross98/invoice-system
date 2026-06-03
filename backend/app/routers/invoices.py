@@ -377,13 +377,14 @@ def export_invoices(invoice_ids: list[int] = Body(...), db: Session = Depends(ge
 
     # —— 按分类汇总：同分类合并为一条，金额求和 ——
     cat_order = []          # 保持分类首次出现顺序
-    cat_groups = {}         # category_name -> {amount, remarks, dates}
+    cat_groups = {}         # category_name -> {amount, count, remarks, dates}
     for inv in invoices:
         cat_name = inv.category.name if (inv.category and inv.category.name) else "其他"
         if cat_name not in cat_groups:
-            cat_groups[cat_name] = {"amount": 0.0, "remarks": [], "dates": []}
+            cat_groups[cat_name] = {"amount": 0.0, "count": 0, "remarks": [], "dates": []}
             cat_order.append(cat_name)
         cat_groups[cat_name]["amount"] += float(inv.total_with_tax or 0)
+        cat_groups[cat_name]["count"] += 1
         if inv.remark:
             cat_groups[cat_name]["remarks"].append(inv.remark.strip())
         if inv.invoice_date:
@@ -412,6 +413,7 @@ def export_invoices(invoice_ids: list[int] = Body(...), db: Session = Depends(ge
             "category": cat_name,
             "date_str": date_str,
             "amount": round(g["amount"], 2),
+            "count": g["count"],
             "remark": remark_str,
         })
 
@@ -478,8 +480,9 @@ def export_invoices(invoice_ids: list[int] = Body(...), db: Session = Depends(ge
         ws.cell(row=row, column=2, value=sr["date_str"])  # B: 日期（月份）
         ws.cell(row=row, column=3, value=sr["category"])  # C: 内容（分类）
         ws.cell(row=row, column=4, value=sr["amount"])    # D: 金额（求和）
-        ws.cell(row=row, column=5, value=sr["remark"])    # E: 备注
-        ws.cell(row=row, column=6, value=sr["category"])  # F: 费用类别
+        ws.cell(row=row, column=5, value=sr["count"])     # E: 发票数量
+        ws.cell(row=row, column=6, value=sr["remark"])    # F: 备注
+        ws.cell(row=row, column=7, value=sr["category"])  # G: 费用类别
 
         # 应用样式（细线边框 + 居中 + 备注自动换行）
         for col_idx, style in template_styles.items():
@@ -489,15 +492,15 @@ def export_invoices(invoice_ids: list[int] = Body(...), db: Session = Depends(ge
             if style.get("fill"):
                 cell.fill = copy.copy(style["fill"])
             cell.border = thin_border
-            # E列（备注）居中+自动换行，其他列居中
-            if col_idx == 5:
+            # F列（备注）居中+自动换行，其他列居中
+            if col_idx == 6:
                 cell.alignment = Alignment(
                     horizontal="center", vertical="center", wrap_text=True
                 )
             else:
                 cell.alignment = Alignment(horizontal="center", vertical="center")
-            # D列（金额）保留数字格式，其他列用模板格式
-            if col_idx != 4:
+            # D列（金额）和 E列（发票数量）保留数字格式，其他列用模板格式
+            if col_idx not in (4, 5):
                 cell.number_format = style.get("number_format", "@")
 
     # 写入新合计行
@@ -512,6 +515,7 @@ def export_invoices(invoice_ids: list[int] = Body(...), db: Session = Depends(ge
         ws.unmerge_cells(mc_str)
     ws.cell(row=summary_new_row, column=3, value="合计")
     ws.cell(row=summary_new_row, column=4, value=f"=SUM(D{data_start_row}:D{summary_new_row - 1})")
+    ws.cell(row=summary_new_row, column=5, value=f"=SUM(E{data_start_row}:E{summary_new_row - 1})")
     for col_idx, style in template_styles.items():
         cell = ws.cell(row=summary_new_row, column=col_idx)
         cell.font = copy.copy(style["font"])
