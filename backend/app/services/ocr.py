@@ -294,7 +294,7 @@ def parse_invoice_from_ocr(ocr_text: str) -> dict:
         "invoice_number": "",
         "invoice_code": "",
         "invoice_type": "增值税普通发票",
-        "invoice_date": datetime.now().strftime("%Y-%m-%d"),
+        "invoice_date": None,
         "total_amount": 0.0,
         "tax_amount": 0.0,
         "total_with_tax": 0.0,
@@ -695,9 +695,9 @@ def _is_valid_company_name(name: str) -> bool:
     if all(frag in _INVALID_NAME_FRAGMENTS for frag in name.split()):
         return False
     # 收紧：必须包含至少一个"公司"/"集团"/"厂"/"店"等机构关键词，
-    # 且整体长度 > 10（OR -> AND），避免 7 字 OCR 碎片混入
+    # 且整体长度 >= 8（OR -> AND），避免短 OCR 碎片混入
     has_org_keyword = any(kw in name for kw in ("公司", "集团", "厂", "店", "分店", "商行", "中心", "工厂"))
-    return has_org_keyword and len(name) > 10
+    return has_org_keyword and len(name) >= 8
 
 
 def _detect_tax_rate(ocr_text: str) -> float | None:
