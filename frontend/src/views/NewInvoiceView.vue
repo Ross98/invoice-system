@@ -60,6 +60,7 @@
               label="不含税金额"
               type="number"
               step="0.01"
+              :rules="[v => !v || v >= 0 || '不能为负']"
               variant="outlined"
               density="compact"
             ></v-text-field>
@@ -70,6 +71,7 @@
               label="税额"
               type="number"
               step="0.01"
+              :rules="[v => !v || v >= 0 || '不能为负']"
               variant="outlined"
               density="compact"
             ></v-text-field>
@@ -80,6 +82,7 @@
               label="含税总金额"
               type="number"
               step="0.01"
+              :rules="[v => !v || v >= 0 || '不能为负']"
               variant="outlined"
               density="compact"
             ></v-text-field>
@@ -224,7 +227,7 @@
         <v-divider class="my-4"></v-divider>
         <v-row>
           <v-col cols="12">
-            <v-btn color="primary" type="submit" block :loading="submitting">
+            <v-btn color="primary" type="submit" block :loading="submitting" :disabled="submitting">
               保存发票
             </v-btn>
           </v-col>

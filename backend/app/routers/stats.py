@@ -126,7 +126,7 @@ def get_dashboard_stats(
         Counterpart.name,
         func.coalesce(func.sum(Invoice.total_with_tax), 0).label("total"),
         func.count(Invoice.id).label("cnt"),
-    ).join(Invoice, Invoice.counterpart_id == Counterpart.id).filter(
+    ).outerjoin(Invoice, Invoice.counterpart_id == Counterpart.id).filter(
         Invoice.invoice_date >= year_start,
         Invoice.invoice_date < year_end,
     ).group_by(Counterpart.id, Counterpart.name).order_by(func.sum(Invoice.total_with_tax).desc()).limit(5).all()

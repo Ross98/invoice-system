@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Generic, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 T = TypeVar("T")
 
@@ -83,6 +83,18 @@ class InvoiceBase(BaseModel):
 
 class InvoiceCreate(InvoiceBase):
     details: list[InvoiceDetailCreate] = []
+    is_reimbursed: bool = Field(
+        False,
+        description="创建时强制为 False,报销状态请通过单独接口变更",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _force_not_reimbursed(cls, data):
+        """创建发票时强制 is_reimbursed=False,绕过报销流程的攻击面"""
+        if isinstance(data, dict) and data.get("is_reimbursed") is True:
+            raise ValueError("创建发票时不能直接设置 is_reimbursed=True,请通过单独报销接口变更")
+        return data
 
 
 class InvoiceUpdate(BaseModel):
@@ -141,8 +153,9 @@ class InvoiceFileCreate(BaseModel):
     file_type: str = Field(..., max_length=20)
     file_size: int
     storage_mode: str = Field(..., max_length=10)
-    file_path: str | None = Field(None, max_length=500)
-    blob_data: str | None = None  # Base64 编码
+    # 以下两个字段由 service 层内部赋值，禁止外部构造（防路径遍历/BLOB 注入）
+    file_path: str | None = Field(None, max_length=500, exclude=True)
+    blob_data: str | None = Field(None, exclude=True)  # Base64 编码
 
 
 class InvoiceFileInternal(BaseModel):

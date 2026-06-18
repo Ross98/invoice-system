@@ -694,8 +694,10 @@ def _is_valid_company_name(name: str) -> bool:
     # 如果名称只由无效碎片组成，拒绝
     if all(frag in _INVALID_NAME_FRAGMENTS for frag in name.split()):
         return False
-    # 必须包含至少一个"公司"相关的词，或长度超过6（减少误匹配）
-    return "公司" in name or "集团" in name or "厂" in name or len(name) > 6
+    # 收紧：必须包含至少一个"公司"/"集团"/"厂"/"店"等机构关键词，
+    # 且整体长度 > 10（OR -> AND），避免 7 字 OCR 碎片混入
+    has_org_keyword = any(kw in name for kw in ("公司", "集团", "厂", "店", "分店", "商行", "中心", "工厂"))
+    return has_org_keyword and len(name) > 10
 
 
 def _detect_tax_rate(ocr_text: str) -> float | None:

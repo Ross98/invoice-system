@@ -134,7 +134,6 @@
           :show-select="true"
           item-value="id"
           hover
-          return-object
           @update:page="onPageChange"
           @update:items-per-page="onPageSizeChange"
         >
