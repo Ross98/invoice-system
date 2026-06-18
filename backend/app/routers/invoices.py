@@ -30,12 +30,20 @@ from ..schemas.invoice import (
     Counterpart as CounterpartSchema,
 )
 from ..schemas.invoice import (
-    Invoice as InvoiceSchema,
+    InvoiceResponse as InvoiceSchema,
 )
 from ..schemas.invoice import (
-    InvoiceFile as InvoiceFileSchema,
+    InvoiceFileResponse as InvoiceFileSchema,
 )
-from ..services.file_storage import delete_file, retrieve_file, store_file
+from ..services.file_storage import (
+    MAGIC_LEN,
+    _detect_mime,
+    _MIME_TO_EXTS,
+    delete_file,
+    retrieve_file,
+    store_file,
+    upload_invoice_file,
+)
 
 router = APIRouter(prefix="/api", tags=["发票管理"])
 
@@ -163,7 +171,7 @@ def delete_invoice(invoice_id: int, db: Session = Depends(get_db)):
 
     # 清理本地文件
     for file in invoice.files:
-        delete_file(file.storage_mode, file.file_path)
+        delete_file(file)
 
     db.delete(invoice)
     db.commit()
@@ -181,26 +189,39 @@ def upload_invoice_file(invoice_id: int, file: UploadFile = File(...), db: Sessi
     if not file.filename:
         raise HTTPException(status_code=400, detail="文件名不能为空")
 
-    # 读取文件内容
-    content = file.file.read()
-    file_size = len(content)
+    # MIME 嗅探：先读前 16 字节检测魔数，再 seek(0) 复位供流式拷贝使用
+    head = file.file.read(MAGIC_LEN)
+    try:
+        file.file.seek(0)
+    except OSError:
+        # 某些流式源不可 seek，回退到一次性读取（极少触发）
+        file.file.seek(0, 2)
+        remaining = file.file.tell()
+        file.file.seek(0)
+        head = head[: min(len(head), remaining)]
 
-    # 检查文件大小
-    from ..config import settings
-    if file_size > settings.max_file_size_bytes:
+    detected_mime = _detect_mime(head)
+    if not detected_mime:
         raise HTTPException(
             status_code=400,
-            detail=f"文件大小超过限制 ({settings.MAX_FILE_SIZE_MB}MB)"
+            detail=f"不支持的文件类型或文件已损坏: {Path(file.filename).suffix.lower()}",
         )
 
-    # 获取文件类型
+    # 后缀必须与嗅探到的 MIME 匹配，防止「改后缀绕过」
     ext = Path(file.filename).suffix.lower().lstrip(".")
-    allowed_types = {"pdf", "png", "jpg", "jpeg", "bmp", "tiff", "tif"}
-    if ext not in allowed_types:
-        raise HTTPException(status_code=400, detail=f"不支持的文件类型: {ext}")
+    allowed_exts = _MIME_TO_EXTS.get(detected_mime, set())
+    if ext not in allowed_exts:
+        raise HTTPException(
+            status_code=400,
+            detail=f"文件扩展名 {ext} 与实际类型 {detected_mime} 不匹配",
+        )
 
-    # 存储文件
-    storage_mode, file_path, blob_data = store_file(content, file.filename, invoice_id)
+    # 流式分块写入（CHUNK_SIZE=1MB），写入过程强制 MAX_FILE_SIZE 上限
+    from ..config import settings
+    max_bytes = settings.max_file_size_bytes
+    storage_mode, file_size, file_path, blob_data = upload_invoice_file(
+        file.file, file.filename, invoice_id, max_bytes
+    )
 
     # 创建文件记录
     invoice_file = InvoiceFile(
@@ -270,7 +291,7 @@ def delete_invoice_file(invoice_id: int, file_id: int, db: Session = Depends(get
     if not file_record:
         raise HTTPException(status_code=404, detail="文件不存在")
 
-    delete_file(file_record.storage_mode, file_record.file_path)
+    delete_file(file_record)
     db.delete(file_record)
     db.commit()
 

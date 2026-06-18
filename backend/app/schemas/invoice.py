@@ -101,7 +101,22 @@ class InvoiceUpdate(BaseModel):
     details: list[InvoiceDetailCreate] | None = None
 
 
-class Invoice(InvoiceBase):
+class InvoiceResponse(InvoiceBase):
+    """对外 API 响应：不含 OCR 原始文本等敏感字段"""
+    id: int
+    counterpart: Counterpart | None = None
+    category: Category | None = None
+    details: list[InvoiceDetail] = []
+    created_at: datetime
+    updated_at: datetime
+    # 显式重写 raw_text 为排除字段，确保不进入 API 响应
+    raw_text: str | None = Field(default=None, exclude=True)
+
+    model_config = {"from_attributes": True}
+
+
+# 内部使用的完整 Schema（含 raw_text），仅服务层使用，不暴露给 API
+class InvoiceInternal(InvoiceBase):
     id: int
     counterpart: Counterpart | None = None
     category: Category | None = None
@@ -118,18 +133,40 @@ class InvoiceFileBase(BaseModel):
     file_name: str = Field(..., max_length=255)
     file_type: str = Field(..., max_length=20)
     file_size: int
+
+
+class InvoiceFileCreate(BaseModel):
+    """文件创建输入：服务端使用，不暴露给 API"""
+    file_name: str = Field(..., max_length=255)
+    file_type: str = Field(..., max_length=20)
+    file_size: int
     storage_mode: str = Field(..., max_length=10)
-
-
-class InvoiceFileCreate(InvoiceFileBase):
     file_path: str | None = Field(None, max_length=500)
     blob_data: str | None = None  # Base64 编码
 
 
-class InvoiceFile(InvoiceFileBase):
+class InvoiceFileInternal(BaseModel):
+    """内部完整文件 Schema：含存储路径等内部字段，仅服务层使用"""
     id: int
     invoice_id: int
+    file_name: str = Field(..., max_length=255)
+    file_type: str = Field(..., max_length=20)
+    file_size: int
+    storage_mode: str = Field(..., max_length=10)
     file_path: str | None = None
+    uploaded_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class InvoiceFileResponse(BaseModel):
+    """对外 API 响应：不含 file_path、storage_mode 等内部实现细节"""
+    id: int
+    invoice_id: int
+    file_name: str = Field(..., max_length=255)
+    file_type: str = Field(..., max_length=20)
+    file_size: int
     uploaded_at: datetime
 
     class Config:

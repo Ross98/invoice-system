@@ -313,10 +313,8 @@ const loadInvoice = async () => {
 }
 
 const submitForm = async () => {
-  if (!form.invoice_number || !form.invoice_type || !form.invoice_date) {
-    alert('请填写必填字段')
-    return
-  }
+  const { valid } = await formRef.value.validate()
+  if (!valid) return
 
   submitting.value = true
   try {

@@ -1,12 +1,13 @@
 """系统设置 API — OCR配置 / 存储配置 / 备份 / 重置"""
 
+import secrets
 from datetime import datetime
 import json
 from pathlib import Path
 import shutil
 import sys
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -14,6 +15,19 @@ from app.config import settings as app_settings
 from app.database import Base, SessionLocal, engine, seed_default_categories
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+
+def require_admin(
+    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
+    token: str | None = Query(default=None),
+):
+    """管理接口鉴权：未配置 ADMIN_TOKEN 时本地不强制；设了以后强制校验。"""
+    expected = app_settings.ADMIN_TOKEN
+    if not expected:
+        return  # 本地开发/未部署环境：跳过校验
+    provided = x_admin_token or token
+    if not provided or not secrets.compare_digest(provided, expected):
+        raise HTTPException(status_code=401, detail="未授权：需要有效的 Admin Token")
 
 
 # ── settings.json 读写 ──
@@ -111,7 +125,7 @@ def save_storage_settings(data: StorageSettings):
     return {"message": "存储设置已保存", "data": data.model_dump()}
 
 
-@router.post("/backup")
+@router.post("/backup", dependencies=[Depends(require_admin)])
 def backup_database():
     """备份 SQLite 数据库，返回 .db 文件下载"""
     # 定位数据库文件
@@ -139,7 +153,7 @@ def backup_database():
     )
 
 
-@router.post("/reset")
+@router.post("/reset", dependencies=[Depends(require_admin)])
 def reset_database():
     """清空数据库并重新初始化"""
     try:

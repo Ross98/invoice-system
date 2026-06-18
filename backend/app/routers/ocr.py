@@ -178,6 +178,11 @@ async def recognize_and_associate(
     from ..routers.invoices import upload_invoice_file
     file_response = await upload_invoice_file(invoice_id, file, db)
 
+    # upload_invoice_file 内部已 file.file.read() 把指针移到了末尾，
+    # 必须在调用 recognize_file 之前 seek(0) 重置指针，
+    # 否则 recognize_file 再读同一对象得到空内容，OCR 静默失败。
+    await file.seek(0)
+
     # 执行 OCR
     ocr_result = await recognize_file(file, lang, db)
 
