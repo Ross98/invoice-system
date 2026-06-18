@@ -52,10 +52,10 @@ jobs:
           pytest tests/ --cov=app --cov-report=xml --cov-report=term --cov-fail-under=0
 
       - name: Run ruff lint
-        working-directory: backend
+        # 从项目根目录跑,让 ruff.toml 的 src/exclude 配置正确解析
         run: |
           pip install ruff
-          ruff check app/
+          ruff check backend/app/
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.12' && github.event_name == 'push'
