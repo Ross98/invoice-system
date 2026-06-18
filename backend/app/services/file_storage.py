@@ -3,9 +3,12 @@
 import base64
 import contextlib
 from pathlib import Path
-from typing import IO
+from typing import IO, TYPE_CHECKING
 
 from ..config import settings
+
+if TYPE_CHECKING:
+    from ..models.invoice import InvoiceFile
 
 # 流式写入块大小（1MB），避免大文件一次性读入内存
 CHUNK_SIZE = 1024 * 1024
@@ -88,11 +91,10 @@ def _stream_to_destination(
     return "blob", total, None, blob_data
 
 
-def upload_invoice_file(
+def stream_upload(
     fp: IO[bytes], file_name: str, invoice_id: int, max_bytes: int
 ) -> tuple[str, int, str | None, str | None]:
-    """
-    流式上传入口：使用 CHUNK_SIZE 分块写入，并在写入过程中强制 max_bytes 上限。
+    """流式上传入口：使用 CHUNK_SIZE 分块写入,强制 max_bytes 上限。
 
     返回 (storage_mode, file_size, file_path, blob_data)。
     超出 max_bytes 时由内部 _stream_to_destination 抛 HTTPException(413)。

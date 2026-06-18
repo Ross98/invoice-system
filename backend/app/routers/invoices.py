@@ -1,9 +1,10 @@
 """发票管理 API 路由"""
 
+import contextlib
 import copy
-import logging
 from datetime import date, datetime
 import io
+import logging
 from pathlib import Path
 from urllib.parse import quote
 
@@ -31,19 +32,18 @@ from ..schemas.invoice import (
     Counterpart as CounterpartSchema,
 )
 from ..schemas.invoice import (
-    InvoiceResponse as InvoiceSchema,
-)
-from ..schemas.invoice import (
     InvoiceFileResponse as InvoiceFileSchema,
 )
+from ..schemas.invoice import (
+    InvoiceResponse as InvoiceSchema,
+)
 from ..services.file_storage import (
+    _MIME_TO_EXTS,
     MAGIC_LEN,
     _detect_mime,
-    _MIME_TO_EXTS,
     delete_file,
     retrieve_file,
-    store_file,
-    upload_invoice_file,
+    stream_upload,
 )
 
 router = APIRouter(prefix="/api", tags=["发票管理"])
@@ -66,9 +66,10 @@ def create_invoice(invoice_data: InvoiceCreate, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(invoice)
         return invoice
-    except Exception:
+    except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail="创建发票失败")
+        logger.exception("创建发票失败")
+        raise HTTPException(status_code=500, detail="创建发票失败") from e
 
 
 @router.get("/invoices", response_model=PaginatedResponse[InvoiceSchema])
@@ -167,9 +168,10 @@ def update_invoice(invoice_id: int, invoice_data: InvoiceUpdate, db: Session = D
         db.commit()
         db.refresh(invoice)
         return invoice
-    except Exception:
+    except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail="更新发票失败")
+        logger.exception("更新发票失败")
+        raise HTTPException(status_code=500, detail="更新发票失败") from e
 
 
 @router.delete("/invoices/{invoice_id}", status_code=204)
@@ -187,11 +189,9 @@ def delete_invoice(invoice_id: int, db: Session = Depends(get_db)):
 
     # 事务提交后再清理物理文件；任一失败不影响已提交的删除结果
     for file in file_records:
-        try:
+        # 文件删除失败不影响主流程，留待后续清理任务
+        with contextlib.suppress(Exception):
             delete_file(file)
-        except Exception:
-            # 文件删除失败不影响主流程，留待后续清理任务
-            pass
 
 
 # ==================== 发票文件管理 ====================
@@ -237,11 +237,11 @@ def upload_invoice_file(invoice_id: int, file: UploadFile = File(...), db: Sessi
     from ..config import settings
     max_bytes = settings.max_file_size_bytes
     try:
-        storage_mode, file_size, file_path, blob_data = upload_invoice_file(
+        storage_mode, file_size, file_path, blob_data = stream_upload(
             file.file, file.filename, invoice_id, max_bytes
         )
-    except Exception:
-        raise HTTPException(status_code=500, detail="文件存储失败")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="文件存储失败") from e
 
     # 创建文件记录
     invoice_file = InvoiceFile(
@@ -257,9 +257,10 @@ def upload_invoice_file(invoice_id: int, file: UploadFile = File(...), db: Sessi
         db.add(invoice_file)
         db.commit()
         db.refresh(invoice_file)
-    except Exception:
+    except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail="文件记录保存失败")
+        logger.exception("文件记录保存失败")
+        raise HTTPException(status_code=500, detail="文件记录保存失败") from e
 
     return invoice_file
 
@@ -287,9 +288,9 @@ def download_invoice_file(invoice_id: int, file_id: int, db: Session = Depends(g
             file_record.file_path,
             file_record.blob_data,
         )
-    except Exception:
+    except Exception as e:
         logger.exception("读取文件失败: file_id=%s", file_record.id)
-        raise HTTPException(status_code=500, detail="文件读取失败")
+        raise HTTPException(status_code=500, detail="文件读取失败") from e
 
     media_types = {
         "PDF": "application/pdf",
