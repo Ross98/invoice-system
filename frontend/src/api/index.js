@@ -1,52 +1,65 @@
 import axios from 'axios'
 
+export const TIMEOUT_DEFAULT = 10000
+export const TIMEOUT_LONG = 60000
+
 const api = axios.create({
   baseURL: '/api',
-  timeout: 10000,
+  timeout: TIMEOUT_DEFAULT,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+
+// 长操作 axios 实例(OCR 大文件、导出等)
+const axiosLong = axios.create({
+  baseURL: '/api',
+  timeout: TIMEOUT_LONG,
   headers: {
     'Content-Type': 'application/json'
   }
 })
 
 // 请求拦截器
-api.interceptors.request.use(
-  config => {
-    // 可以在这里添加 token 等
-    return config
-  },
-  error => {
-    return Promise.reject(error)
-  }
-)
-
-// 响应拦截器
-api.interceptors.response.use(
-  response => response.data,
-  error => {
-    if (error.response) {
-      const { status, data } = error.response
-      let message = data?.detail || '请求失败'
-      
-      if (status === 401) {
-        message = '未授权，请重新登录'
-      } else if (status === 403) {
-        message = '权限不足'
-      } else if (status === 404) {
-        message = '资源不存在'
-      } else if (status === 409) {
-        message = data?.detail || '数据冲突：发票已存在'
-      } else if (status >= 500) {
-        message = data?.detail || '服务器错误'
-      }
-      
-      return Promise.reject({ message, status, data })
-    } else if (error.request) {
-      return Promise.reject({ message: '网络连接失败' })
-    } else {
-      return Promise.reject({ message: error.message })
+;[api, axiosLong].forEach(instance => {
+  instance.interceptors.request.use(
+    config => {
+      // 可以在这里添加 token 等
+      return config
+    },
+    error => {
+      return Promise.reject(error)
     }
-  }
-)
+  )
+
+  instance.interceptors.response.use(
+    response => response.data,
+    error => {
+      if (error.response) {
+        const { status, data } = error.response
+        let message = data?.detail || '请求失败'
+
+        if (status === 401) {
+          message = '未授权，请重新登录'
+        } else if (status === 403) {
+          message = '权限不足'
+        } else if (status === 404) {
+          message = '资源不存在'
+        } else if (status === 409) {
+          message = data?.detail || '数据冲突：发票已存在'
+        } else if (status >= 500) {
+          message = data?.detail || '服务器错误'
+        }
+
+        return Promise.reject({ message, status, data })
+      } else if (error.request) {
+        return Promise.reject({ message: '网络连接失败' })
+      } else {
+        return Promise.reject({ message: error.message })
+      }
+    }
+  )
+})
 
 // 发票相关 API
 export const invoiceApi = {
@@ -79,7 +92,7 @@ export const invoiceApi = {
   uploadFile(invoiceId, file) {
     const formData = new FormData()
     formData.append('file', file)
-    return api.post(`/invoices/${invoiceId}/files`, formData, {
+    return axiosLong.post(`/invoices/${invoiceId}/files`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
@@ -114,34 +127,34 @@ export const ocrApi = {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('lang', lang)
-    return api.post('/ocr/recognize', formData, {
+    return axiosLong.post('/ocr/recognize', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
-  
+
   // OCR 识别并关联到发票
   recognizeAndAssociate(invoiceId, file, lang = 'chi_sim+eng') {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('lang', lang)
-    return api.post(`/ocr/recognize/${invoiceId}`, formData, {
+    return axiosLong.post(`/ocr/recognize/${invoiceId}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
-  
+
   // 解析发票信息
   parseInvoice(file, lang = 'chi_sim+eng') {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('lang', lang)
-    return api.post('/ocr/parse', formData, {
+    return axiosLong.post('/ocr/parse', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
-  
+
   // 导入发票
   importInvoice(invoiceData) {
-    return api.post('/ocr/import', invoiceData)
+    return axiosLong.post('/ocr/import', invoiceData)
   }
 }
 
@@ -212,7 +225,7 @@ export const settingsApi = {
   },
 
   backupDatabase() {
-    return api.post('/settings/backup', {}, { responseType: 'blob' })
+    return axiosLong.post('/settings/backup', {}, { responseType: 'blob' })
   },
 
   resetDatabase() {

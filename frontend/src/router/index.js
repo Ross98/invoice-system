@@ -90,6 +90,13 @@ const routes = [
   { path: '/categories', redirect: '/master-data/categories' },
   { path: '/counterparts', redirect: '/master-data/counterparts' },
   { path: '/reports',   redirect: '/reports/invoice' },
+
+  // ── 404 fallback ──
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: () => import('@/views/NotFoundView.vue')
+  }
 ]
 
 const router = createRouter({

@@ -191,11 +191,19 @@
         </v-btn>
       </div>
     </v-alert>
+
+    <!-- 全局提示 -->
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="4000" location="top">
+      {{ snackbar.text }}
+      <template #actions>
+        <v-btn variant="text" @click="snackbar.show = false">关闭</v-btn>
+      </template>
+    </v-snackbar>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ocrApi } from '@/api'
 
@@ -209,6 +217,14 @@ const useCloudOcr = ref(false)
 const ocrStatus = ref(null)
 const parsedInvoices = ref([])
 const importingIndex = ref(-1)
+
+// 全局提示
+const snackbar = reactive({ show: false, text: '', color: 'info' })
+const notify = (text, color = 'info') => {
+  snackbar.text = text
+  snackbar.color = color
+  snackbar.show = true
+}
 
 const ocrLanguages = [
   { title: '简体中文', value: 'chi_sim' },
@@ -264,7 +280,7 @@ const uploadFiles = async () => {
   
   if (!files.value || !files.value.length) {
     console.log('uploadFiles: 没有文件, 放弃')
-    alert('请先选择发票文件')
+    notify('请先选择发票文件', 'warning')
     return
   }
 
@@ -307,7 +323,7 @@ const uploadFiles = async () => {
         }
       } catch (error) {
         console.error('发票解析失败:', error)
-        alert('解析失败: ' + (error.message || '未知错误'))
+        notify('解析失败: ' + (error.message || '未知错误'), 'error')
       } finally {
         uploading.value = false
       }
@@ -316,20 +332,20 @@ const uploadFiles = async () => {
 const importInvoice = async (parsed) => {
   const index = parsedInvoices.value.indexOf(parsed)
   importingIndex.value = index
-  
+
   try {
     const invoiceData = parsed.parsed.invoice_data
     const result = await ocrApi.importInvoice(invoiceData)
-    alert(`发票导入成功！发票号: ${result.invoice_number}`)
+    notify(`发票导入成功！发票号: ${result.invoice_number}`, 'success')
     // 移除已导入的项
     parsedInvoices.value.splice(index, 1)
   } catch (error) {
     console.error('发票导入失败:', error)
     if (error.status === 409) {
-      // 重复发票 - 提供查看已有发票的选项
-      alert(error.message || '该发票已存在，请勿重复导入')
+      // 重复发票
+      notify(error.message || '该发票已存在，请勿重复导入', 'warning')
     } else {
-      alert('导入失败: ' + (error.message || '未知错误'))
+      notify('导入失败: ' + (error.message || '未知错误'), 'error')
     }
   } finally {
     importingIndex.value = -1

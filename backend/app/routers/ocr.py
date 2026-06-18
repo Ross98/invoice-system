@@ -33,9 +33,9 @@ def _fallback_from_filename(filename: str, parsed: dict, ocr_text: str) -> None:
     if not parsed.get("counterpart_name") or parsed["counterpart_name"] in ("", "TAXI", "铁路客票"):
         company_patterns = [
             # 精确：公司/集团/厂/店/行/社 结尾的完整名称
-            r'([\u4e00-\u9fff（）()]{2,8}(?:公司|集团|厂|店|行|社|部))',
+            r'([一-鿿（）()]{2,8}(?:公司|集团|厂|店|行|社|部))',
             # 宽松：较长的中文字符串
-            r'([\u4e00-\u9fff（）()]{6,40})',
+            r'([一-鿿（）()]{6,40})',
         ]
         for pat in company_patterns:
             matches = _re.findall(pat, fname_noext)
@@ -252,8 +252,8 @@ async def parse_invoice(
                 if amt_m:
                     try:
                         fname_amt = float(amt_m.group(1))
-                        # 合理范围且不是 8 位日期
-                        if 1 <= fname_amt <= 99999 and not _re2.match(r'^\d{8}$', amt_m.group(1)):
+                        # 合理范围且不是 6/8 位纯数字段(日期格式)
+                        if 1 <= fname_amt <= 99999 and not _re2.match(r'^\d{6,8}$', amt_m.group(1)):
                             parsed["total_with_tax"] = fname_amt
                             parsed["total_amount"] = fname_amt
                             print(f"[DEBUG] 文件名金额兜底: {fname_amt} (from {part!r})", flush=True)
@@ -267,16 +267,16 @@ async def parse_invoice(
         is_taxi = False
         try:
             fname = (file.filename or "")
-            is_taxi = any(kw in fname for kw in ["\u51fa\u79df\u8f66", "taxi", "\u51fa\u79df"])
+            is_taxi = any(kw in fname for kw in ["出租车", "taxi", "出租"])
         except Exception:
             pass
         if not is_taxi:
             # OCR 文本特征检测
-            taxi_keywords = ["\u542b\u7535\u8c03\u8d39", "\u8282\u5047\u65e5\u9644\u52a0\u8d39", "\u4f59\u989d", "\u91cc\u7a0b", "\u8ba1\u4ef7", "\u6253\u8868", "\u7535\u8c03"]
+            taxi_keywords = ["含电调费", "节假日附加费", "余额", "里程", "计价", "打表", "电调"]
             is_taxi = any(kw in text for kw in taxi_keywords)
 
         if is_taxi:
-            parsed["invoice_type"] = "\u51fa\u79df\u8f66\u53d1\u7968"
+            parsed["invoice_type"] = "出租车发票"
             parsed["counterpart_name"] = "TAXI"
             parsed["invoice_number"] = "TAXI-" + (parsed.get("invoice_date") or datetime.now().strftime("%Y%m%d"))
             print("[DEBUG] taxi-detect: set invoice_type=taxi", flush=True)
@@ -285,18 +285,18 @@ async def parse_invoice(
         is_railway = False
         try:
             fname = (file.filename or "")
-            is_railway = any(kw in fname for kw in ["\u94c1\u8def\u7535\u5b50\u5ba2\u7968", "\u94c1\u8def", "\u9ad8\u94c1", "\u706b\u8f66\u7968", "\u52a8\u8f66\u7968"])
+            is_railway = any(kw in fname for kw in ["铁路电子客票", "铁路", "高铁", "火车票", "动车票"])
         except Exception:
             pass
         if not is_railway:
-            railway_keywords = ["\u94c1\u8def\u7535\u5b50\u5ba2\u7968", "\u94c1\u8def", "\u8f66\u6b21", "\u5ea7\u4f4d", "\u53d1\u8f66", "\u5230\u7ad9", "\u4e58\u8f66\u65e5\u671f"]
+            railway_keywords = ["铁路电子客票", "铁路", "车次", "座位", "发车", "到站", "乘车日期"]
             is_railway = any(kw in text for kw in railway_keywords)
 
         if is_railway:
-            parsed["invoice_type"] = "\u94c1\u8def\u7535\u5b50\u5ba2\u7968"
+            parsed["invoice_type"] = "铁路电子客票"
             # 铁路客票销方通常是 12306 或铁路局，OCR 识别不出时设为通用值
             if not parsed.get("counterpart_name"):
-                parsed["counterpart_name"] = "\u94c1\u8def\u5ba2\u7968"
+                parsed["counterpart_name"] = "铁路客票"
             if not parsed.get("invoice_number"):
                 parsed["invoice_number"] = "RAIL-" + (parsed.get("invoice_date") or datetime.now().strftime("%Y%m%d"))
             print("[DEBUG] railway-detect: set invoice_type=railway", flush=True)

@@ -175,15 +175,21 @@
 
     <!-- 发票列表 -->
     <v-card border flat>
-      <v-data-table
+      <v-data-table-server
         v-model="selectedIds"
         :headers="headers"
         :items="invoices"
         :loading="loading"
+        :items-length="totalCount"
+        :page="page"
+        :items-per-page="pageSize"
+        :items-per-page-options="[20, 50, 100, 200]"
         show-select
         item-value="id"
         hover
         density="compact"
+        @update:page="onPageChange"
+        @update:items-per-page="onPageSizeChange"
       >
         <template #item.invoice_date="{ item }">
           {{ formatDate(item.invoice_date) }}
@@ -206,7 +212,7 @@
             {{ item.is_reimbursed ? '已报销' : '待报销' }}
           </v-chip>
         </template>
-      </v-data-table>
+      </v-data-table-server>
     </v-card>
   </div>
 </template>
@@ -223,6 +229,11 @@ const invoices = ref([])
 const selectedIds = ref([])
 const categoryItems = ref([])
 const counterpartItems = ref([])
+
+// 分页状态
+const page = ref(1)
+const pageSize = ref(50)
+const totalCount = ref(0)
 
 const headers = [
   { title: '发票号码', key: 'invoice_number', sortable: true },
@@ -287,27 +298,36 @@ function formatDate(d) {
 async function loadInvoices() {
   loading.value = true
   try {
-    const params = { limit: 200 }
+    const params = {
+      skip: (page.value - 1) * pageSize.value,
+      limit: pageSize.value
+    }
     if (filters.startDate) params.start_date = filters.startDate
     if (filters.endDate) params.end_date = filters.endDate
     if (filters.categoryId) params.category_id = filters.categoryId
     if (filters.counterpartId) params.counterpart_id = filters.counterpartId
+    if (filters.reimbursed === 'yes') params.is_reimbursed = 'true'
+    else if (filters.reimbursed === 'no') params.is_reimbursed = 'false'
     const res = await api.get('/invoices', { params })
-    let items = res.items || []
-
-    if (filters.reimbursed === 'yes') {
-      items = items.filter(i => i.is_reimbursed)
-    } else if (filters.reimbursed === 'no') {
-      items = items.filter(i => !i.is_reimbursed)
-    }
-
-    invoices.value = items
+    invoices.value = res.items || []
+    totalCount.value = res.total != null ? res.total : (res.items?.length || 0)
     selectedIds.value = []
   } catch (err) {
     console.error('加载失败:', err)
   } finally {
     loading.value = false
   }
+}
+
+function onPageChange(newPage) {
+  page.value = newPage
+  loadInvoices()
+}
+
+function onPageSizeChange(newSize) {
+  pageSize.value = newSize
+  page.value = 1
+  loadInvoices()
 }
 
 async function loadMeta() {

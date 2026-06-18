@@ -319,6 +319,29 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- 单条删除确认 -->
+    <v-dialog v-model="deleteDialog" max-width="400">
+      <v-card>
+        <v-card-title class="text-h6">删除发票确认</v-card-title>
+        <v-card-text>
+          确定要删除发票 "{{ deleteTarget?.invoice_number }}" 吗？此操作不可撤销。
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn variant="text" @click="deleteDialog = false">取消</v-btn>
+          <v-btn color="error" :loading="deleting" @click="doDelete">确认删除</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- 全局提示 -->
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="3000" location="top">
+      {{ snackbar.text }}
+      <template #actions>
+        <v-btn variant="text" @click="snackbar.show = false">关闭</v-btn>
+      </template>
+    </v-snackbar>
   </div>
 </template>
 
@@ -389,6 +412,19 @@ const batchDeleteDialog = ref(false)
 const batchDeleting = ref(false)
 const batchDeleteTarget = ref([])
 
+// ── 单条删除确认 ──
+const deleteDialog = ref(false)
+const deleteTarget = ref(null)
+const deleting = ref(false)
+
+// ── 全局提示 ──
+const snackbar = reactive({ show: false, text: '', color: 'success' })
+const notify = (text, color = 'success') => {
+  snackbar.text = text
+  snackbar.color = color
+  snackbar.show = true
+}
+
 const formatDate = (d) => d ? new Date(d).toLocaleDateString('zh-CN') : ''
 const formatAmount = (v) => (v != null) ? Number(v).toFixed(2) : '0.00'
 
@@ -411,6 +447,7 @@ const loadInvoices = async () => {
     invoices.value = invoiceStore.invoices
   } catch (e) {
     console.error('加载发票列表失败:', e)
+    notify('加载发票列表失败，请稍后重试', 'error')
   } finally {
     loading.value = false
   }
@@ -450,33 +487,64 @@ const toggleReimbursed = async (invoice) => {
   }
 }
 
-const confirmDelete = async (invoice) => {
-  if (!confirm(`确定要删除发票 "${invoice.invoice_number}" 吗？`)) return
+const confirmDelete = (invoice) => {
+  deleteTarget.value = invoice
+  deleteDialog.value = true
+}
+
+const doDelete = async () => {
+  if (!deleteTarget.value) return
+  deleting.value = true
   try {
-    await invoiceStore.deleteInvoice(invoice.id)
+    await invoiceStore.deleteInvoice(deleteTarget.value.id)
+    deleteDialog.value = false
+    deleteTarget.value = null
+    notify('删除成功', 'success')
     await loadInvoices()
   } catch (e) {
     console.error('删除失败:', e)
+    notify('删除失败: ' + (e.message || '未知错误'), 'error')
+  } finally {
+    deleting.value = false
   }
 }
 
 // ── 批量操作 ──
+const batchToggling = ref(false)
+const batchToggleProgress = ref({ done: 0, total: 0 })
+
 const batchToggleReimbursed = async (val) => {
-  const ids = selectedItems.value.map(i => i.id)
-  for (const item of selectedItems.value) {
-    item.is_reimbursed = val
-  }
+  const targets = [...selectedItems.value]
+  const total = targets.length
+  if (total === 0) return
+  batchToggling.value = true
+  batchToggleProgress.value = { done: 0, total }
+  // 乐观更新 UI
+  targets.forEach(item => { item.is_reimbursed = val })
   try {
-    // 逐条更新（后端没有批量接口，后续可加）
-    for (const id of ids) {
-      await invoiceStore.updateInvoice(id, { is_reimbursed: val })
-    }
+    // 并发调用（后端暂未提供批量接口）
+    const settled = await Promise.allSettled(
+      targets.map(item => invoiceStore.updateInvoice(item.id, { is_reimbursed: val }))
+    )
+    const succeeded = settled.filter(r => r.status === 'fulfilled').length
+    const failed = total - succeeded
     selectedItems.value = []
-  } catch {
-    // 回退
-    for (const item of selectedItems.value) {
-      item.is_reimbursed = !val
+    if (failed === 0) {
+      notify(`已成功${val ? '标记' : '取消'} ${succeeded} 张发票的报销状态`, 'success')
+    } else if (succeeded === 0) {
+      // 全部失败 —— 回滚乐观更新
+      targets.forEach(item => { item.is_reimbursed = !val })
+      notify(`操作失败，请稍后重试（${failed}/${total}）`, 'error')
+    } else {
+      notify(`部分成功：成功 ${succeeded} 张，失败 ${failed} 张`, 'warning')
     }
+  } catch (e) {
+    targets.forEach(item => { item.is_reimbursed = !val })
+    console.error('批量更新报销状态失败:', e)
+    notify('批量更新失败: ' + (e.message || '未知错误'), 'error')
+  } finally {
+    batchToggling.value = false
+    batchToggleProgress.value = { done: 0, total: 0 }
   }
 }
 
@@ -502,10 +570,11 @@ const doBatchDelete = async () => {
     }
     batchDeleteDialog.value = false
     selectedItems.value = []
+    notify('批量删除成功', 'success')
     await loadInvoices()
   } catch (e) {
     console.error('批量删除失败:', e)
-    alert('删除失败: ' + (e.message || '未知错误'))
+    notify('删除失败: ' + (e.message || '未知错误'), 'error')
   } finally {
     batchDeleting.value = false
   }

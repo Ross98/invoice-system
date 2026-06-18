@@ -7,10 +7,14 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 
 from ..config import settings
 from ..resource_path import get_poppler_path as _rp_poppler
 from ..resource_path import get_tesseract_path as _rp_tesseract
+
+# PDF OCR 并发保护：限制同时处理的 PDF 数量，防止多请求并发触发内存峰值叠加
+PDF_SEMAPHORE = threading.Semaphore(2)
 
 
 def _find_tesseract() -> str | None:
@@ -49,49 +53,51 @@ def _preprocess_image(image_path: str) -> str:
     """对图片进行预处理（灰度化、增强对比度、二值化），返回预处理后的临时文件路径"""
     from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
-    img = Image.open(image_path)
+    with Image.open(image_path) as img:
+        # 如果图片太小，放大到合理尺寸（至少宽度 1500px）
+        w, h = img.size
+        min_width = 1500
+        if w < min_width:
+            scale = min_width / w
+            img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
 
-    # 如果图片太小，放大到合理尺寸（至少宽度 1500px）
-    w, h = img.size
-    min_width = 1500
-    if w < min_width:
-        scale = min_width / w
-        img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+        # 转灰度
+        if img.mode != 'L':
+            img = img.convert('L')
 
-    # 转灰度
-    if img.mode != 'L':
-        img = img.convert('L')
+        # 增强对比度
+        enhancer = ImageEnhance.Contrast(img)
+        img = enhancer.enhance(2.0)
 
-    # 增强对比度
-    enhancer = ImageEnhance.Contrast(img)
-    img = enhancer.enhance(2.0)
+        # 锐化
+        img = img.filter(ImageFilter.SHARPEN)
 
-    # 锐化
-    img = img.filter(ImageFilter.SHARPEN)
+        # 自适应二值化（使用 PIL 的 threshold 方法）
+        # 先获取像素直方图，使用大津法自动计算阈值
+        try:
+            img = ImageOps.autocontrast(img, cutoff=5)
+            # 再手动二值化：计算平均值作为阈值
+            pixels = list(img.getdata())
+            avg = sum(pixels) / len(pixels)
+            threshold = int(avg * 0.85)  # 稍微偏暗
+            img = img.point(lambda p: 255 if p > threshold else 0)
+        except Exception:
+            # 兜底：简单二值化
+            img = img.point(lambda p: 255 if p > 127 else 0)
 
-    # 自适应二值化（使用 PIL 的 threshold 方法）
-    # 先获取像素直方图，使用大津法自动计算阈值
-    try:
-        img = ImageOps.autocontrast(img, cutoff=5)
-        # 再手动二值化：计算平均值作为阈值
-        pixels = list(img.getdata())
-        avg = sum(pixels) / len(pixels)
-        threshold = int(avg * 0.85)  # 稍微偏暗
-        img = img.point(lambda p: 255 if p > threshold else 0)
-    except Exception:
-        # 兜底：简单二值化
-        img = img.point(lambda p: 255 if p > 127 else 0)
-
-    # 保存到临时文件
-    fd, preprocessed_path = tempfile.mkstemp(suffix=".png")
-    os.close(fd)
-    img.save(preprocessed_path, "PNG")
+        # 保存到临时文件
+        fd, preprocessed_path = tempfile.mkstemp(suffix=".png")
+        os.close(fd)
+        img.save(preprocessed_path, "PNG")
 
     return preprocessed_path
 
 
-def _run_tesseract(image_path: str, lang: str, psm: int | None = None) -> str:
-    """调用 Tesseract 执行 OCR"""
+def _run_tesseract(image_path: str, lang: str, psm: int | None = None, page_count: int = 1) -> str:
+    """调用 Tesseract 执行 OCR
+
+    page_count: 调用方预估的页数/图片数，用于动态调整超时阈值
+    """
     tesseract_path = _find_tesseract()
     if not tesseract_path:
         raise RuntimeError(
@@ -99,9 +105,13 @@ def _run_tesseract(image_path: str, lang: str, psm: int | None = None) -> str:
             "或在 .env 中配置 TESSERACT_PATH。"
         )
 
-    fd, out_base = tempfile.mkstemp(suffix="")
-    os.close(fd)
+    # 使用专属临时目录统一管理 tesseract 输出的所有文件（.txt/.tsv/.hocr/.osd/.box）
+    tmp_dir = tempfile.mkdtemp(prefix="ocr_tess_")
+    out_base = os.path.join(tmp_dir, "out")
     out_path = out_base + ".txt"
+
+    # 动态超时：每页 30s + 60s 基础，最低 120s（兼容 10+ 页高分辨率 PDF）
+    timeout = max(120, 60 + page_count * 30)
 
     try:
         cmd = [tesseract_path, image_path, out_base, "-l", lang]
@@ -110,7 +120,7 @@ def _run_tesseract(image_path: str, lang: str, psm: int | None = None) -> str:
 
         result = subprocess.run(
             cmd,
-            capture_output=True, text=True, timeout=120,
+            capture_output=True, text=True, timeout=timeout,
         )
 
         if not os.path.exists(out_path):
@@ -125,15 +135,11 @@ def _run_tesseract(image_path: str, lang: str, psm: int | None = None) -> str:
 
         return output
     finally:
-        Path(out_path).unlink(missing_ok=True)
-        # 清理 tesseract 可能生成的其他文件
-        for f in [out_base, out_base + ".osd", out_base + ".box"]:
-            if os.path.exists(f):
-                with contextlib.suppress(OSError):
-                    os.unlink(f)
+        # 一次性清理整个临时目录中的所有 tesseract 产物（.txt/.tsv/.hocr/.osd/.box）
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-def ocr_image(image_path: str, lang: str = "chi_sim+eng") -> str:
+def ocr_image(image_path: str, lang: str = "chi_sim+eng", page_count: int = 1) -> str:
     """对图片进行 OCR 识别，返回文本结果（含预处理增强）"""
 
     # 尝试多种 PSM 模式，从最宽松到最优化
@@ -144,7 +150,7 @@ def ocr_image(image_path: str, lang: str = "chi_sim+eng") -> str:
     for psm in psm_modes:
         try:
             # 直接 OCR（不预处理）先试一次
-            return _run_tesseract(image_path, lang, psm)
+            return _run_tesseract(image_path, lang, psm, page_count=page_count)
         except RuntimeError as e:
             last_error = e
             continue
@@ -156,7 +162,7 @@ def ocr_image(image_path: str, lang: str = "chi_sim+eng") -> str:
 
         for psm in psm_modes:
             try:
-                return _run_tesseract(preprocessed_path, lang, psm)
+                return _run_tesseract(preprocessed_path, lang, psm, page_count=page_count)
             except RuntimeError as e:
                 last_error = e
                 continue
@@ -172,76 +178,77 @@ def ocr_pdf(pdf_path: str, lang: str = "chi_sim+eng") -> str:
     """对 PDF 进行 OCR 识别，先将 PDF 转为图片再 OCR"""
     import tempfile
 
-    try:
-        from pdf2image import convert_from_path
-    except ImportError:
-        raise RuntimeError(
-            "PDF OCR 需要 pdf2image 库。请运行: pip install pdf2image"
-        ) from None
-
-    # 先尝试 pdfplumber 直接提取文本层（对电子发票 PDF 通常有文本层）
-    pdf_text = _extract_pdf_text_layer(pdf_path, "")
-    if pdf_text and len(pdf_text) >= 100:
-        import re as _re
-        has_keyword = bool(_re.search(r'发票|票据|客票|运输|客运', pdf_text))
-        has_amount = bool(_re.search(r'[¥￥革]\s*\d|价税合计|票价|金额|合计', pdf_text))
-        if has_keyword and has_amount:
-            return pdf_text  # 文本层提取成功，直接返回
-
-    # pdfplumber 不足，用图片 OCR
-    images = []  # List of PIL Image objects
-
-    # 方法1: pdf2image + poppler（优先，质量最好）
-    poppler_path = _find_poppler()
-    print(f"[DEBUG] ocr_pdf: poppler_path={poppler_path!r} pdf={pdf_path!r}", flush=True)
-    pdf2image_err = None
-    try:
-        images = convert_from_path(pdf_path, dpi=200, poppler_path=poppler_path)
-    except Exception as exc:
-        pdf2image_err = exc
-        print(f"[DEBUG] convert_from_path failed: {exc}, trying pypdfium2", flush=True)
-
-    # 方法2: pypdfium2 渲染（不依赖 poppler，Windows 更可靠）
-    if not images:
+    with PDF_SEMAPHORE:
         try:
-            import pypdfium2 as pdfium
-            doc = pdfium.PdfDocument(pdf_path)
-            n_pages = len(doc)
-            print(f"[DEBUG] pypdfium2: {n_pages} pages", flush=True)
-            for i in range(n_pages):
-                page = doc[i]
-                bitmap = page.render(scale=3.0)  # scale 3.0 ≈ 216 DPI, 铁路客票等长条形票据需要更高分辨率
-                pil_img = bitmap.to_pil()
-                images.append(pil_img)
-                page.close()
-                bitmap.close()
-            doc.close()
-        except Exception as exc2:
-            print(f"[DEBUG] pypdfium2 also failed: {exc2}", flush=True)
-            # 两个方法都失败，有文字层就返回文字层
-            if pdf_text:
-                return pdf_text
-            raise RuntimeError(f"PDF 转图片失败: pdf2image={pdf2image_err}, pypdfium2={exc2}") from exc2
+            from pdf2image import convert_from_path
+        except ImportError:
+            raise RuntimeError(
+                "PDF OCR 需要 pdf2image 库。请运行: pip install pdf2image"
+            ) from None
 
-    texts = []
+        # 先尝试 pdfplumber 直接提取文本层（对电子发票 PDF 通常有文本层）
+        pdf_text = _extract_pdf_text_layer(pdf_path, "")
+        if pdf_text and len(pdf_text) >= 100:
+            import re as _re
+            has_keyword = bool(_re.search(r'发票|票据|客票|运输|客运', pdf_text))
+            has_amount = bool(_re.search(r'[¥￥革]\s*\d|价税合计|票价|金额|合计', pdf_text))
+            if has_keyword and has_amount:
+                return pdf_text  # 文本层提取成功，直接返回
 
-    if pdf_text:
-        texts.append(f"[文本层]\n{pdf_text}")
+        # pdfplumber 不足，用图片 OCR
+        images = []  # List of PIL Image objects
 
-    for i, img in enumerate(images):
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-            img.save(tmp.name, "PNG")
-            tmp_path = tmp.name
-
+        # 方法1: pdf2image + poppler（优先，质量最好）
+        poppler_path = _find_poppler()
+        print(f"[DEBUG] ocr_pdf: poppler_path={poppler_path!r} pdf={pdf_path!r}", flush=True)
+        pdf2image_err = None
         try:
-            page_text = ocr_image(tmp_path, lang)
-            texts.append(f"[第 {i+1} 页 OCR]\n{page_text}")
-        except Exception as e:
-            texts.append(f"[第 {i+1} 页]\n[OCR失败: {e}]")
-        finally:
-            Path(tmp_path).unlink(missing_ok=True)
+            images = convert_from_path(pdf_path, dpi=200, poppler_path=poppler_path)
+        except Exception as exc:
+            pdf2image_err = exc
+            print(f"[DEBUG] convert_from_path failed: {exc}, trying pypdfium2", flush=True)
 
-    return "\n\n".join(texts) if texts else (pdf_text or "")
+        # 方法2: pypdfium2 渲染（不依赖 poppler，Windows 更可靠）
+        if not images:
+            try:
+                import pypdfium2 as pdfium
+                doc = pdfium.PdfDocument(pdf_path)
+                n_pages = len(doc)
+                print(f"[DEBUG] pypdfium2: {n_pages} pages", flush=True)
+                for i in range(n_pages):
+                    page = doc[i]
+                    bitmap = page.render(scale=3.0)  # scale 3.0 ≈ 216 DPI, 铁路客票等长条形票据需要更高分辨率
+                    pil_img = bitmap.to_pil()
+                    images.append(pil_img)
+                    page.close()
+                    bitmap.close()
+                doc.close()
+            except Exception as exc2:
+                print(f"[DEBUG] pypdfium2 also failed: {exc2}", flush=True)
+                # 两个方法都失败，有文字层就返回文字层
+                if pdf_text:
+                    return pdf_text
+                raise RuntimeError(f"PDF 转图片失败: pdf2image={pdf2image_err}, pypdfium2={exc2}") from exc2
+
+        texts = []
+
+        if pdf_text:
+            texts.append(f"[文本层]\n{pdf_text}")
+
+        for i, img in enumerate(images):
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                img.save(tmp.name, "PNG")
+                tmp_path = tmp.name
+
+            try:
+                page_text = ocr_image(tmp_path, lang, page_count=len(images))
+                texts.append(f"[第 {i+1} 页 OCR]\n{page_text}")
+            except Exception as e:
+                texts.append(f"[第 {i+1} 页]\n[OCR失败: {e}]")
+            finally:
+                Path(tmp_path).unlink(missing_ok=True)
+
+        return "\n\n".join(texts) if texts else (pdf_text or "")
 
 
 def _extract_pdf_text_layer(pdf_path: str, fallback_text: str = "") -> str:
@@ -291,6 +298,7 @@ def parse_invoice_from_ocr(ocr_text: str) -> dict:
         "total_amount": 0.0,
         "tax_amount": 0.0,
         "total_with_tax": 0.0,
+        "amount_recognized": False,
         "check_code": "",
         "counterpart_name": "",
         "buyer_name": "",
@@ -304,20 +312,20 @@ def parse_invoice_from_ocr(ocr_text: str) -> dict:
 
     # 1. 规则解析
     # ===== 发票号码：多策略提取 =====
-    # 策略1：关键词"发票号码"后跟数字
-    invoice_number_match = re.search(r'发票号码[:：]?\s*(\d{8,20})', ocr_text, re.IGNORECASE)
+    # 策略1：关键词"发票号码"后跟数字（标准为12-20位，老发票可能8位）
+    invoice_number_match = re.search(r'发票号码[:：]?\s*(\d{12,20})', ocr_text, re.IGNORECASE)
     if invoice_number_match:
         result["invoice_number"] = invoice_number_match.group(1)
 
     # 策略2：OCR 可能把"发票号码"识别为分离的字符（如"发票 号码"、"发 票 号 码"等）
     if not result["invoice_number"]:
-        inv_num_loose = re.search(r'发票\s*号\s*码\s*[:：]?\s*(\d{8,20})', ocr_text)
+        inv_num_loose = re.search(r'发票\s*号\s*码\s*[:：]?\s*(\d{12,20})', ocr_text)
         if inv_num_loose:
             result["invoice_number"] = inv_num_loose.group(1)
 
     # 策略3：查找"号码"关键词（有些发票格式只用"号码"）
     if not result["invoice_number"]:
-        num_only = re.search(r'(?:号码|编号)\s*[:：]?\s*(\d{8,20})', ocr_text)
+        num_only = re.search(r'(?:号码|编号)\s*[:：]?\s*(\d{12,20})', ocr_text)
         if num_only:
             result["invoice_number"] = num_only.group(1)
 
@@ -336,12 +344,19 @@ def parse_invoice_from_ocr(ocr_text: str) -> dict:
 
     # 策略5：查找单独出现的长数字串（有些发票 OCR 后号码独立一行）
     if not result["invoice_number"]:
-        standalone_nums = re.findall(r'(?:^|\n)\s*(\d{10,22})\s*(?:\n|$)', ocr_text, re.MULTILINE)
+        standalone_nums = re.findall(r'(?:^|\n)\s*(\d{12,22})\s*(?:\n|$)', ocr_text, re.MULTILINE)
         for num in standalone_nums:
             if len(set(num)) > 2:  # 排除像 0000000000 的无效序列
                 result["invoice_number"] = num
                 print(f"[DEBUG] 策略5 从独立行提取发票号码: {num}", flush=True)
                 break
+
+    # 策略6（兜底）：8 位短号码——保留以兼容老版定额发票
+    if not result["invoice_number"]:
+        short_num = re.search(r'发票号码[:：]?\s*(\d{8})(?!\d)', ocr_text, re.IGNORECASE)
+        if short_num and len(set(short_num.group(1))) > 1:
+            result["invoice_number"] = short_num.group(1)
+            print(f"[DEBUG] 策略6 从8位短号码提取发票号码: {short_num.group(1)}", flush=True)
 
     # 发票代码：通常为10-12位数字
     invoice_code_match = re.search(r'发票代码[:：]?\s*(\d{10,12})', ocr_text, re.IGNORECASE)
@@ -371,6 +386,9 @@ def parse_invoice_from_ocr(ocr_text: str) -> dict:
                 # 标准化日期格式
                 date_str = date_str.replace('年', '-').replace('月', '-').replace('日', '').replace('/', '-')
                 dt = datetime.strptime(date_str, "%Y-%m-%d")
+                # 上下界校验：拒绝 0001-01-01 / 9999-12-31 等异常日期
+                if not (2000 <= dt.year <= datetime.now().year + 1):
+                    continue
                 result["invoice_date"] = dt.strftime("%Y-%m-%d")
                 break
             except (ValueError, KeyError):
@@ -481,10 +499,20 @@ def parse_invoice_from_ocr(ocr_text: str) -> dict:
             else:
                 result["tax_amount"] = round(result["total_with_tax"] - result["total_amount"], 2)
         else:
-            result["total_amount"] = round(result["total_with_tax"] / 1.13, 2)
-            result["tax_amount"] = round(result["total_with_tax"] - result["total_amount"], 2)
+            # 尝试从 OCR 文本中识别实际税率（6%/9%/13%）
+            detected_rate = _detect_tax_rate(ocr_text)
+            if detected_rate is not None:
+                result["total_amount"] = round(result["total_with_tax"] / (1 + detected_rate), 2)
+                result["tax_amount"] = round(result["total_with_tax"] - result["total_amount"], 2)
+            else:
+                # 兜底：未识别到税率时不强行反算，保留识别到的 total_with_tax
+                result["total_amount"] = 0.0
+                result["tax_amount"] = 0.0
     else:
         pass  # 未发现有效金额
+
+    # 标记金额识别状态
+    result["amount_recognized"] = bool(result["total_with_tax"] > 0)
 
     # 销方名称（处理OCR分拆：销 售 方 名称 / 售 名称 / 销售方名称 等变体）
     seller_match = re.search(r'(?:销[售\s]*方?\s*名\s*称|售\s*名\s*称)[:：]?\s*([^\n]+)', ocr_text)
@@ -668,6 +696,36 @@ def _is_valid_company_name(name: str) -> bool:
         return False
     # 必须包含至少一个"公司"相关的词，或长度超过6（减少误匹配）
     return "公司" in name or "集团" in name or "厂" in name or len(name) > 6
+
+
+def _detect_tax_rate(ocr_text: str) -> float | None:
+    """从 OCR 文本中识别增值税税率（返回小数，如 0.13 表示 13%）
+
+    策略：
+    1. 优先匹配"税率"关键词后跟数字
+    2. 兜底匹配"增值税"上下文附近的百分比数字
+    3. 数字必须在 1-20 范围内（中国增值税税率常见值）
+    """
+    # 策略1: 显式的"税率"关键词
+    rate_match = re.search(r'税率\s*[:：]?\s*(\d+(?:\.\d+)?)\s*%', ocr_text)
+    if rate_match:
+        rate_val = float(rate_match.group(1))
+        if 1.0 <= rate_val <= 20.0:
+            return rate_val / 100.0
+
+    # 策略2: "增值税"附近出现的百分比数字
+    context_patterns = [
+        r'增值税[^%]{0,20}(\d+(?:\.\d+)?)\s*%',
+        r'(\d+(?:\.\d+)?)\s*%[^%]{0,20}增值税',
+    ]
+    for pat in context_patterns:
+        m = re.search(pat, ocr_text)
+        if m:
+            rate_val = float(m.group(1))
+            if 1.0 <= rate_val <= 20.0:
+                return rate_val / 100.0
+
+    return None
 
 
 def _extract_transport_names(ocr_text: str, result: dict):

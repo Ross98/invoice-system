@@ -1,6 +1,7 @@
 """发票管理 API 路由"""
 
 import copy
+import logging
 from datetime import date, datetime
 import io
 from pathlib import Path
@@ -46,6 +47,7 @@ from ..services.file_storage import (
 )
 
 router = APIRouter(prefix="/api", tags=["发票管理"])
+logger = logging.getLogger(__name__)
 
 
 # ==================== 发票 CRUD ====================
@@ -53,16 +55,20 @@ router = APIRouter(prefix="/api", tags=["发票管理"])
 @router.post("/invoices", response_model=InvoiceSchema, status_code=201)
 def create_invoice(invoice_data: InvoiceCreate, db: Session = Depends(get_db)):
     """创建发票（含明细）"""
-    invoice = Invoice(**invoice_data.model_dump(exclude={"details"}))
-    db.add(invoice)
+    try:
+        invoice = Invoice(**invoice_data.model_dump(exclude={"details"}))
+        db.add(invoice)
 
-    for detail_data in invoice_data.details:
-        detail = InvoiceDetail(invoice=invoice, **detail_data.model_dump())
-        db.add(detail)
+        for detail_data in invoice_data.details:
+            detail = InvoiceDetail(invoice=invoice, **detail_data.model_dump())
+            db.add(detail)
 
-    db.commit()
-    db.refresh(invoice)
-    return invoice
+        db.commit()
+        db.refresh(invoice)
+        return invoice
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="创建发票失败")
 
 
 @router.get("/invoices", response_model=PaginatedResponse[InvoiceSchema])
@@ -143,23 +149,27 @@ def update_invoice(invoice_id: int, invoice_data: InvoiceUpdate, db: Session = D
     if not invoice:
         raise HTTPException(status_code=404, detail="发票不存在")
 
-    # 更新发票主字段
-    update_dict = invoice_data.model_dump(exclude={"details"}, exclude_unset=True)
-    for key, value in update_dict.items():
-        setattr(invoice, key, value)
+    try:
+        # 更新发票主字段
+        update_dict = invoice_data.model_dump(exclude={"details"}, exclude_unset=True)
+        for key, value in update_dict.items():
+            setattr(invoice, key, value)
 
-    # 更新明细（如果提供了）
-    if invoice_data.details is not None:
-        # 删除旧明细
-        db.query(InvoiceDetail).filter(InvoiceDetail.invoice_id == invoice_id).delete()
-        # 添加新明细
-        for detail_data in invoice_data.details:
-            detail = InvoiceDetail(invoice_id=invoice_id, **detail_data.model_dump())
-            db.add(detail)
+        # 更新明细（如果提供了）
+        if invoice_data.details is not None:
+            # 删除旧明细
+            db.query(InvoiceDetail).filter(InvoiceDetail.invoice_id == invoice_id).delete()
+            # 添加新明细
+            for detail_data in invoice_data.details:
+                detail = InvoiceDetail(invoice_id=invoice_id, **detail_data.model_dump())
+                db.add(detail)
 
-    db.commit()
-    db.refresh(invoice)
-    return invoice
+        db.commit()
+        db.refresh(invoice)
+        return invoice
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="更新发票失败")
 
 
 @router.delete("/invoices/{invoice_id}", status_code=204)
@@ -169,12 +179,19 @@ def delete_invoice(invoice_id: int, db: Session = Depends(get_db)):
     if not invoice:
         raise HTTPException(status_code=404, detail="发票不存在")
 
-    # 清理本地文件
-    for file in invoice.files:
-        delete_file(file)
+    # 先收集待删文件记录（不立即删物理文件，避免 DB 回滚后文件已删）
+    file_records = list(invoice.files)
 
     db.delete(invoice)
     db.commit()
+
+    # 事务提交后再清理物理文件；任一失败不影响已提交的删除结果
+    for file in file_records:
+        try:
+            delete_file(file)
+        except Exception:
+            # 文件删除失败不影响主流程，留待后续清理任务
+            pass
 
 
 # ==================== 发票文件管理 ====================
@@ -219,9 +236,12 @@ def upload_invoice_file(invoice_id: int, file: UploadFile = File(...), db: Sessi
     # 流式分块写入（CHUNK_SIZE=1MB），写入过程强制 MAX_FILE_SIZE 上限
     from ..config import settings
     max_bytes = settings.max_file_size_bytes
-    storage_mode, file_size, file_path, blob_data = upload_invoice_file(
-        file.file, file.filename, invoice_id, max_bytes
-    )
+    try:
+        storage_mode, file_size, file_path, blob_data = upload_invoice_file(
+            file.file, file.filename, invoice_id, max_bytes
+        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="文件存储失败")
 
     # 创建文件记录
     invoice_file = InvoiceFile(
@@ -233,9 +253,13 @@ def upload_invoice_file(invoice_id: int, file: UploadFile = File(...), db: Sessi
         file_path=file_path,
         blob_data=blob_data,
     )
-    db.add(invoice_file)
-    db.commit()
-    db.refresh(invoice_file)
+    try:
+        db.add(invoice_file)
+        db.commit()
+        db.refresh(invoice_file)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="文件记录保存失败")
 
     return invoice_file
 
@@ -263,8 +287,9 @@ def download_invoice_file(invoice_id: int, file_id: int, db: Session = Depends(g
             file_record.file_path,
             file_record.blob_data,
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"读取文件失败: {e!s}") from e
+    except Exception:
+        logger.exception("读取文件失败: file_id=%s", file_record.id)
+        raise HTTPException(status_code=500, detail="文件读取失败")
 
     media_types = {
         "PDF": "application/pdf",
@@ -390,7 +415,9 @@ def export_invoices(invoice_ids: list[int] = Body(...), db: Session = Depends(ge
     if not invoice_ids:
         raise HTTPException(status_code=400, detail="请选择至少一张发票")
 
-    invoices = db.query(Invoice).filter(Invoice.id.in_(invoice_ids)).order_by(
+    invoices = db.query(Invoice).options(
+        selectinload(Invoice.category)
+    ).filter(Invoice.id.in_(invoice_ids)).order_by(
         Invoice.invoice_date.asc()
     ).all()
     if not invoices:

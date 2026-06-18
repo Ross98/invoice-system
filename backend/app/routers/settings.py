@@ -1,5 +1,6 @@
 """系统设置 API — OCR配置 / 存储配置 / 备份 / 重置"""
 
+import logging
 import secrets
 from datetime import datetime
 import json
@@ -13,6 +14,8 @@ from pydantic import BaseModel
 
 from app.config import settings as app_settings
 from app.database import Base, SessionLocal, engine, seed_default_categories
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -167,4 +170,5 @@ def reset_database():
         seed_default_categories()
         return {"message": "数据库已重置"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"数据库重置失败: {e!s}") from e
+        logger.exception("数据库重置失败")
+        raise HTTPException(status_code=500, detail="数据库重置失败，请联系管理员") from e

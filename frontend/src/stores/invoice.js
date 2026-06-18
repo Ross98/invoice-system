@@ -32,8 +32,9 @@ export const useInvoiceStore = defineStore('invoice', {
           limit: this.pagination.pageSize,
           ...params
         })
-        this.invoices = response.items || response
-        this.pagination.total = response.total || response.length
+        const items = Array.isArray(response) ? response : (response.items || [])
+        this.invoices = items
+        this.pagination.total = response.total || items.length
       } catch (err) {
         this.error = err.message
         console.error('获取发票列表失败:', err)

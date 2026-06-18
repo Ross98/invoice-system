@@ -506,7 +506,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useInvoiceStore } from '@/stores/invoice'
 import { ocrApi } from '@/api'
@@ -555,6 +555,10 @@ const showSnackbar = (message, color = 'success') => {
   snackbar.color = color
   snackbar.show = true
 }
+
+// ── 组件卸载守卫：防止异步操作在卸载后 resolve/reject 造成内存泄露 ──
+let cancelled = false
+onUnmounted(() => { cancelled = true })
 
 const manualForm = reactive({
   invoice_number: '',
@@ -612,8 +616,10 @@ const startOcr = async () => {
   const newResults = []
 
   for (const file of ocrFiles.value) {
+    if (cancelled) break
     try {
       const result = await ocrApi.parseInvoice(file, ocrLang.value)
+      if (cancelled) return
       const item = {
         filename: file.name,
         data: result.invoice_data,
@@ -630,10 +636,12 @@ const startOcr = async () => {
       if (autoCreateInvoice.value) {
         try {
           const importResult = await ocrApi.importInvoice(result.invoice_data)
+          if (cancelled) return
           item.imported = true
           item.importedId = importResult.id
           item.importedNumber = importResult.invoice_number
         } catch (e) {
+          if (cancelled) return
           if (e.status === 409) {
             item.duplicate = true
             item.duplicateMessage = e.message || '该发票已存在'
@@ -643,6 +651,7 @@ const startOcr = async () => {
 
       newResults.push(item)
     } catch (e) {
+      if (cancelled) return
       console.error(`OCR 解析失败 (${file.name}):`, e)
       newResults.push({
         filename: file.name,
@@ -660,6 +669,7 @@ const startOcr = async () => {
     }
   }
 
+  if (cancelled) return
   ocrResults.value = newResults
   // 自动展开全部结果
   expandedResults.value = newResults.map((_, i) => i)

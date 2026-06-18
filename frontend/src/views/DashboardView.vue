@@ -318,6 +318,14 @@
       </v-card-text>
     </v-card>
     </template>
+
+    <!-- 全局错误提示 -->
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="4000" location="top">
+      {{ snackbar.message }}
+      <template #actions>
+        <v-btn variant="text" @click="snackbar.show = false">关闭</v-btn>
+      </template>
+    </v-snackbar>
   </div>
 </template>
 
@@ -326,6 +334,12 @@ import { ref, computed, onMounted } from 'vue'
 import { statsApi } from '@/api'
 
 const loading = ref(true)
+const snackbar = ref({ show: false, message: '', color: 'error' })
+const showSnackbar = (message, color = 'error') => {
+  snackbar.value.message = message
+  snackbar.value.color = color
+  snackbar.value.show = true
+}
 const stats = ref({
   month: { year: 0, month: 0, total_count: 0, total_amount: 0, total_tax: 0, reimbursed_count: 0, pending_count: 0 },
   overall: { total_count: 0, total_amount: 0, total_reimbursed: 0 },
@@ -394,6 +408,7 @@ onMounted(async () => {
     stats.value = data
   } catch (err) {
     console.error('加载仪表盘数据失败:', err)
+    showSnackbar('加载仪表盘数据失败: ' + (err.message || '网络错误'))
   } finally {
     loading.value = false
   }
