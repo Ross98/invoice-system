@@ -86,6 +86,9 @@ cd backend
 # 后端自动修复
 .venv\Scripts\ruff.exe check --fix app/
 
+# 后端测试
+.venv\Scripts\python.exe -m pytest tests/ -v
+
 # 前端 Lint
 cd frontend
 npm run lint
@@ -93,6 +96,14 @@ npm run lint
 # 前端格式化
 npm run format
 ```
+
+### CI/CD
+
+PR 与 push 到 `main` / `V2.0` 分支时会自动触发 [Tests workflow](.github/workflows/tests.yml):
+
+- **Backend job** (Windows runner, Python 3.12): 安装依赖 → pytest + coverage → ruff lint
+- **Frontend job** (Ubuntu, Node 20): `npm ci` → `npm run lint`
+- 两个 job 都通过才算 ✅,任一失败会阻止合并
 
 详见 [代码审查标准](docs/CODE_REVIEW_STANDARDS.md)。
 
