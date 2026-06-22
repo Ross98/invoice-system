@@ -4,13 +4,25 @@
     <v-card class="mb-4">
       <v-card-title class="d-flex align-center">
         <span class="text-h5">发票管理</span>
-        <v-spacer></v-spacer>
-        <v-btn color="secondary" variant="tonal" class="mr-2" @click="exportDialog = true">
-          <v-icon left>mdi-file-export</v-icon>
+        <v-spacer />
+        <v-btn
+          color="secondary"
+          variant="tonal"
+          class="mr-2"
+          @click="exportDialog = true"
+        >
+          <v-icon left>
+            mdi-file-export
+          </v-icon>
           导出
         </v-btn>
-        <v-btn color="primary" @click="$router.push('/invoices/new')">
-          <v-icon left>mdi-plus</v-icon>
+        <v-btn
+          color="primary"
+          @click="$router.push('/invoices/new')"
+        >
+          <v-icon left>
+            mdi-plus
+          </v-icon>
           新建发票
         </v-btn>
       </v-card-title>
@@ -20,7 +32,10 @@
     <v-card class="mb-4">
       <v-card-text>
         <v-row dense>
-          <v-col cols="12" md="3">
+          <v-col
+            cols="12"
+            md="3"
+          >
             <v-text-field
               v-model="search.invoiceNumber"
               label="发票号码"
@@ -29,9 +44,12 @@
               density="compact"
               clearable
               hide-details
-            ></v-text-field>
+            />
           </v-col>
-          <v-col cols="12" md="3">
+          <v-col
+            cols="12"
+            md="3"
+          >
             <v-text-field
               v-model="search.searchText"
               label="全文搜索"
@@ -40,9 +58,12 @@
               density="compact"
               clearable
               hide-details
-            ></v-text-field>
+            />
           </v-col>
-          <v-col cols="12" md="2">
+          <v-col
+            cols="12"
+            md="2"
+          >
             <v-select
               v-model="search.invoiceType"
               label="发票类型"
@@ -51,9 +72,12 @@
               density="compact"
               clearable
               hide-details
-            ></v-select>
+            />
           </v-col>
-          <v-col cols="12" md="2">
+          <v-col
+            cols="12"
+            md="2"
+          >
             <v-select
               v-model="search.categoryId"
               label="消费分类"
@@ -64,14 +88,26 @@
               density="compact"
               clearable
               hide-details
-            ></v-select>
+            />
           </v-col>
-          <v-col cols="12" md="2">
-            <v-btn color="primary" block @click="handleSearch">查询</v-btn>
+          <v-col
+            cols="12"
+            md="2"
+          >
+            <v-btn
+              color="primary"
+              block
+              @click="handleSearch"
+            >
+              查询
+            </v-btn>
           </v-col>
         </v-row>
         <v-row dense>
-          <v-col cols="12" md="3">
+          <v-col
+            cols="12"
+            md="3"
+          >
             <v-text-field
               v-model="search.startDate"
               label="开始日期"
@@ -80,9 +116,12 @@
               density="compact"
               clearable
               hide-details
-            ></v-text-field>
+            />
           </v-col>
-          <v-col cols="12" md="3">
+          <v-col
+            cols="12"
+            md="3"
+          >
             <v-text-field
               v-model="search.endDate"
               label="结束日期"
@@ -91,9 +130,12 @@
               density="compact"
               clearable
               hide-details
-            ></v-text-field>
+            />
           </v-col>
-          <v-col cols="12" md="3">
+          <v-col
+            cols="12"
+            md="3"
+          >
             <v-text-field
               v-model="search.minAmount"
               label="最低金额"
@@ -102,9 +144,12 @@
               density="compact"
               clearable
               hide-details
-            ></v-text-field>
+            />
           </v-col>
-          <v-col cols="12" md="3">
+          <v-col
+            cols="12"
+            md="3"
+          >
             <v-text-field
               v-model="search.maxAmount"
               label="最高金额"
@@ -113,7 +158,7 @@
               density="compact"
               clearable
               hide-details
-            ></v-text-field>
+            />
           </v-col>
         </v-row>
       </v-card-text>
@@ -139,8 +184,15 @@
         >
           <template #no-data>
             <div class="text-center py-8">
-              <v-icon size="48" color="grey-lighten-1">mdi-receipt-text-outline</v-icon>
-              <div class="text-body-1 mt-2 text-medium-emphasis">暂无发票记录</div>
+              <v-icon
+                size="48"
+                color="grey-lighten-1"
+              >
+                mdi-receipt-text-outline
+              </v-icon>
+              <div class="text-body-1 mt-2 text-medium-emphasis">
+                暂无发票记录
+              </div>
               <v-btn
                 variant="text"
                 color="primary"
@@ -161,7 +213,11 @@
             {{ item.counterpart?.name || '-' }}
           </template>
           <template #item.category="{ item }">
-            <v-chip size="x-small" variant="tonal" :color="item.category?.color || 'grey'">
+            <v-chip
+              size="x-small"
+              variant="tonal"
+              :color="item.category?.color || 'grey'"
+            >
               {{ item.category?.name || '-' }}
             </v-chip>
           </template>
@@ -181,8 +237,8 @@
               icon
               variant="text"
               size="small"
-              @click.stop="$router.push(`/invoices/${item.id}`)"
               title="查看详情"
+              @click.stop="$router.push(`/invoices/${item.id}`)"
             >
               <v-icon>mdi-eye</v-icon>
             </v-btn>
@@ -190,8 +246,8 @@
               icon
               variant="text"
               size="small"
-              @click.stop="$router.push(`/invoices/${item.id}/edit`)"
               title="编辑"
+              @click.stop="$router.push(`/invoices/${item.id}/edit`)"
             >
               <v-icon>mdi-pencil</v-icon>
             </v-btn>
@@ -200,8 +256,8 @@
               variant="text"
               size="small"
               color="error"
-              @click.stop="confirmDelete(item)"
               title="删除"
+              @click.stop="confirmDelete(item)"
             >
               <v-icon>mdi-delete</v-icon>
             </v-btn>
@@ -220,9 +276,11 @@
         elevation="8"
       >
         <v-card-text class="d-flex align-center pa-3">
-          <v-icon class="mr-2">mdi-checkbox-multiple-marked</v-icon>
+          <v-icon class="mr-2">
+            mdi-checkbox-multiple-marked
+          </v-icon>
           <span class="text-body-1 mr-4">已选 {{ selectedItems.length }} 项</span>
-          <v-spacer></v-spacer>
+          <v-spacer />
           <v-btn
             color="success"
             variant="elevated"
@@ -230,7 +288,12 @@
             class="mr-2"
             @click="batchToggleReimbursed(true)"
           >
-            <v-icon left size="18">mdi-check-circle</v-icon>
+            <v-icon
+              left
+              size="18"
+            >
+              mdi-check-circle
+            </v-icon>
             标记已报销
           </v-btn>
           <v-btn
@@ -240,7 +303,12 @@
             class="mr-2"
             @click="batchExport"
           >
-            <v-icon left size="18">mdi-file-export</v-icon>
+            <v-icon
+              left
+              size="18"
+            >
+              mdi-file-export
+            </v-icon>
             导出选中
           </v-btn>
           <v-btn
@@ -249,7 +317,12 @@
             size="small"
             @click="batchDeleteConfirm"
           >
-            <v-icon left size="18">mdi-delete</v-icon>
+            <v-icon
+              left
+              size="18"
+            >
+              mdi-delete
+            </v-icon>
             删除
           </v-btn>
           <v-btn
@@ -266,9 +339,14 @@
     </v-slide-y-reverse-transition>
 
     <!-- 导出对话框 -->
-    <v-dialog v-model="exportDialog" max-width="480">
+    <v-dialog
+      v-model="exportDialog"
+      max-width="480"
+    >
       <v-card>
-        <v-card-title class="text-h6">导出发票数据</v-card-title>
+        <v-card-title class="text-h6">
+          导出发票数据
+        </v-card-title>
         <v-card-text>
           <v-select
             v-model="exportScope"
@@ -277,7 +355,7 @@
             variant="outlined"
             density="compact"
             class="mb-3"
-          ></v-select>
+          />
           <v-select
             v-model="exportFormat"
             label="导出格式"
@@ -285,19 +363,30 @@
             variant="outlined"
             density="compact"
             class="mb-3"
-          ></v-select>
+          />
           <v-checkbox
             v-model="exportSummarize"
             label="按分类汇总"
             density="compact"
             hide-details
-          ></v-checkbox>
+          />
         </v-card-text>
         <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn variant="text" @click="exportDialog = false">取消</v-btn>
-          <v-btn color="primary" :loading="exporting" @click="doExport">
-            <v-icon left>mdi-download</v-icon>
+          <v-spacer />
+          <v-btn
+            variant="text"
+            @click="exportDialog = false"
+          >
+            取消
+          </v-btn>
+          <v-btn
+            color="primary"
+            :loading="exporting"
+            @click="doExport"
+          >
+            <v-icon left>
+              mdi-download
+            </v-icon>
             导出
           </v-btn>
         </v-card-actions>
@@ -305,127 +394,167 @@
     </v-dialog>
 
     <!-- 批量删除确认 -->
-    <v-dialog v-model="batchDeleteDialog" max-width="400">
+    <v-dialog
+      v-model="batchDeleteDialog"
+      max-width="400"
+    >
       <v-card>
-        <v-card-title class="text-h6">批量删除确认</v-card-title>
+        <v-card-title class="text-h6">
+          批量删除确认
+        </v-card-title>
         <v-card-text>
           确定要删除选中的 {{ batchDeleteTarget.length }} 张发票吗？此操作不可撤销。
         </v-card-text>
         <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn variant="text" @click="batchDeleteDialog = false">取消</v-btn>
-          <v-btn color="error" :loading="batchDeleting" @click="doBatchDelete">确认删除</v-btn>
+          <v-spacer />
+          <v-btn
+            variant="text"
+            @click="batchDeleteDialog = false"
+          >
+            取消
+          </v-btn>
+          <v-btn
+            color="error"
+            :loading="batchDeleting"
+            @click="doBatchDelete"
+          >
+            确认删除
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
     <!-- 单条删除确认 -->
-    <v-dialog v-model="deleteDialog" max-width="400">
+    <v-dialog
+      v-model="deleteDialog"
+      max-width="400"
+    >
       <v-card>
-        <v-card-title class="text-h6">删除发票确认</v-card-title>
+        <v-card-title class="text-h6">
+          删除发票确认
+        </v-card-title>
         <v-card-text>
           确定要删除发票 "{{ deleteTarget?.invoice_number }}" 吗？此操作不可撤销。
         </v-card-text>
         <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn variant="text" @click="deleteDialog = false">取消</v-btn>
-          <v-btn color="error" :loading="deleting" @click="doDelete">确认删除</v-btn>
+          <v-spacer />
+          <v-btn
+            variant="text"
+            @click="deleteDialog = false"
+          >
+            取消
+          </v-btn>
+          <v-btn
+            color="error"
+            :loading="deleting"
+            @click="doDelete"
+          >
+            确认删除
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
     <!-- 全局提示 -->
-    <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="3000" location="top">
+    <v-snackbar
+      v-model="snackbar.show"
+      :color="snackbar.color"
+      :timeout="3000"
+      location="top"
+    >
       {{ snackbar.text }}
       <template #actions>
-        <v-btn variant="text" @click="snackbar.show = false">关闭</v-btn>
+        <v-btn
+          variant="text"
+          @click="snackbar.show = false"
+        >
+          关闭
+        </v-btn>
       </template>
     </v-snackbar>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { useInvoiceStore } from '@/stores/invoice'
+import { ref, reactive, computed, onMounted } from "vue";
+import { useInvoiceStore } from "@/stores/invoice";
 
-const router = useRouter()
-const invoiceStore = useInvoiceStore()
+const invoiceStore = useInvoiceStore();
 
-const loading = ref(false)
-const invoices = ref([])
-const selectedItems = ref([])
+const loading = ref(false);
+const invoices = ref([]);
+const selectedItems = ref([]);
 
 const headers = [
-  { title: '发票号码', key: 'invoice_number', sortable: true },
-  { title: '发票代码', key: 'invoice_code', sortable: true },
-  { title: '类型', key: 'invoice_type', sortable: true },
-  { title: '开票日期', key: 'invoice_date', sortable: true },
-  { title: '含税金额', key: 'total_with_tax', sortable: true },
-  { title: '对方单位', key: 'counterpart', sortable: false },
-  { title: '分类', key: 'category', sortable: false },
-  { title: '报销状态', key: 'is_reimbursed', sortable: false },
-  { title: '操作', key: 'actions', sortable: false }
-]
+  { title: "发票号码", key: "invoice_number", sortable: true },
+  { title: "发票代码", key: "invoice_code", sortable: true },
+  { title: "类型", key: "invoice_type", sortable: true },
+  { title: "开票日期", key: "invoice_date", sortable: true },
+  { title: "含税金额", key: "total_with_tax", sortable: true },
+  { title: "对方单位", key: "counterpart", sortable: false },
+  { title: "分类", key: "category", sortable: false },
+  { title: "报销状态", key: "is_reimbursed", sortable: false },
+  { title: "操作", key: "actions", sortable: false },
+];
 
-const typeOptions = ['增值税专票', '增值税普票', '电子发票']
-const categoryItems = ref([])
+const typeOptions = ["增值税专票", "增值税普票", "电子发票"];
+const categoryItems = ref([]);
 
 const search = reactive({
-  invoiceNumber: '',
-  searchText: '',
-  invoiceType: '',
+  invoiceNumber: "",
+  searchText: "",
+  invoiceType: "",
   categoryId: null,
-  startDate: '',
-  endDate: '',
-  minAmount: '',
-  maxAmount: ''
-})
+  startDate: "",
+  endDate: "",
+  minAmount: "",
+  maxAmount: "",
+});
 
 const pagination = computed(() => ({
   page: invoiceStore.pagination.page,
   pageSize: invoiceStore.pagination.pageSize,
-  total: invoiceStore.pagination.total
-}))
+  total: invoiceStore.pagination.total,
+}));
 
 // ── 导出 ──
-const exportDialog = ref(false)
-const exporting = ref(false)
-const exportScope = ref('current')
-const exportFormat = ref('xlsx')
-const exportSummarize = ref(false)
+const exportDialog = ref(false);
+const exporting = ref(false);
+const exportScope = ref("current");
+const exportFormat = ref("xlsx");
+const exportSummarize = ref(false);
 
 const exportScopes = [
-  { title: '当前筛选结果', value: 'current' },
-  { title: '全部发票', value: 'all' },
-  { title: '已报销', value: 'reimbursed' },
-  { title: '未报销', value: 'unreimbursed' }
-]
+  { title: "当前筛选结果", value: "current" },
+  { title: "全部发票", value: "all" },
+  { title: "已报销", value: "reimbursed" },
+  { title: "未报销", value: "unreimbursed" },
+];
 const exportFormats = [
-  { title: 'Excel (.xlsx)', value: 'xlsx' },
-  { title: 'CSV (.csv)', value: 'csv' }
-]
+  { title: "Excel (.xlsx)", value: "xlsx" },
+  { title: "CSV (.csv)", value: "csv" },
+];
 
 // ── 批量操作 ──
-const batchDeleteDialog = ref(false)
-const batchDeleting = ref(false)
-const batchDeleteTarget = ref([])
+const batchDeleteDialog = ref(false);
+const batchDeleting = ref(false);
+const batchDeleteTarget = ref([]);
 
 // ── 单条删除确认 ──
-const deleteDialog = ref(false)
-const deleteTarget = ref(null)
-const deleting = ref(false)
+const deleteDialog = ref(false);
+const deleteTarget = ref(null);
+const deleting = ref(false);
 
 // ── 全局提示 ──
-const snackbar = reactive({ show: false, text: '', color: 'success' })
-const notify = (text, color = 'success') => {
-  snackbar.text = text
-  snackbar.color = color
-  snackbar.show = true
-}
+const snackbar = reactive({ show: false, text: "", color: "success" });
+const notify = (text, color = "success") => {
+  snackbar.text = text;
+  snackbar.color = color;
+  snackbar.show = true;
+};
 
-const formatDate = (d) => d ? new Date(d).toLocaleDateString('zh-CN') : ''
-const formatAmount = (v) => (v != null) ? Number(v).toFixed(2) : '0.00'
+const formatDate = (d) => d ? new Date(d).toLocaleDateString("zh-CN") : "";
+const formatAmount = (v) => (v != null) ? Number(v).toFixed(2) : "0.00";
 
 // ── 数据加载 ──
 const buildParams = () => ({
@@ -435,177 +564,177 @@ const buildParams = () => ({
   category_id: search.categoryId || undefined,
   start_date: search.startDate || undefined,
   end_date: search.endDate || undefined,
-  min_amount: search.minAmount !== '' && search.minAmount != null ? search.minAmount : undefined,
-  max_amount: search.maxAmount !== '' && search.maxAmount != null ? search.maxAmount : undefined
-})
+  min_amount: search.minAmount !== "" && search.minAmount != null ? search.minAmount : undefined,
+  max_amount: search.maxAmount !== "" && search.maxAmount != null ? search.maxAmount : undefined,
+});
 
 const loadInvoices = async () => {
-  loading.value = true
+  loading.value = true;
   try {
-    await invoiceStore.fetchInvoices(buildParams())
-    invoices.value = invoiceStore.invoices
+    await invoiceStore.fetchInvoices(buildParams());
+    invoices.value = invoiceStore.invoices;
   } catch (e) {
-    console.error('加载发票列表失败:', e)
-    notify('加载发票列表失败，请稍后重试', 'error')
+    console.error("加载发票列表失败:", e);
+    notify("加载发票列表失败，请稍后重试", "error");
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const loadCategories = async () => {
-  await invoiceStore.fetchCategories()
-  categoryItems.value = invoiceStore.categories
-}
+  await invoiceStore.fetchCategories();
+  categoryItems.value = invoiceStore.categories;
+};
 
 const handleSearch = () => {
-  selectedItems.value = []
-  invoiceStore.setPage(1)
-  loadInvoices()
-}
+  selectedItems.value = [];
+  invoiceStore.setPage(1);
+  loadInvoices();
+};
 
 const onPageChange = (page) => {
-  invoiceStore.setPage(page)
-  selectedItems.value = []
-  loadInvoices()
-}
+  invoiceStore.setPage(page);
+  selectedItems.value = [];
+  loadInvoices();
+};
 
 const onPageSizeChange = (size) => {
-  invoiceStore.setPageSize(size)
-  selectedItems.value = []
-  loadInvoices()
-}
+  invoiceStore.setPageSize(size);
+  selectedItems.value = [];
+  loadInvoices();
+};
 
 // ── 单条操作 ──
 const toggleReimbursed = async (invoice) => {
-  const newVal = !invoice.is_reimbursed
-  invoice.is_reimbursed = newVal
+  const newVal = !invoice.is_reimbursed;
+  invoice.is_reimbursed = newVal;
   try {
-    await invoiceStore.updateInvoice(invoice.id, { is_reimbursed: newVal })
+    await invoiceStore.updateInvoice(invoice.id, { is_reimbursed: newVal });
   } catch {
-    invoice.is_reimbursed = !newVal
+    invoice.is_reimbursed = !newVal;
   }
-}
+};
 
 const confirmDelete = (invoice) => {
-  deleteTarget.value = invoice
-  deleteDialog.value = true
-}
+  deleteTarget.value = invoice;
+  deleteDialog.value = true;
+};
 
 const doDelete = async () => {
-  if (!deleteTarget.value) return
-  deleting.value = true
+  if (!deleteTarget.value) return;
+  deleting.value = true;
   try {
-    await invoiceStore.deleteInvoice(deleteTarget.value.id)
-    deleteDialog.value = false
-    deleteTarget.value = null
-    notify('删除成功', 'success')
-    await loadInvoices()
+    await invoiceStore.deleteInvoice(deleteTarget.value.id);
+    deleteDialog.value = false;
+    deleteTarget.value = null;
+    notify("删除成功", "success");
+    await loadInvoices();
   } catch (e) {
-    console.error('删除失败:', e)
-    notify('删除失败: ' + (e.message || '未知错误'), 'error')
+    console.error("删除失败:", e);
+    notify("删除失败: " + (e.message || "未知错误"), "error");
   } finally {
-    deleting.value = false
+    deleting.value = false;
   }
-}
+};
 
 // ── 批量操作 ──
-const batchToggling = ref(false)
-const batchToggleProgress = ref({ done: 0, total: 0 })
+const batchToggling = ref(false);
+const batchToggleProgress = ref({ done: 0, total: 0 });
 
 const batchToggleReimbursed = async (val) => {
-  const targets = [...selectedItems.value]
-  const total = targets.length
-  if (total === 0) return
-  batchToggling.value = true
-  batchToggleProgress.value = { done: 0, total }
+  const targets = [...selectedItems.value];
+  const total = targets.length;
+  if (total === 0) return;
+  batchToggling.value = true;
+  batchToggleProgress.value = { done: 0, total };
   // 乐观更新 UI
-  targets.forEach(item => { item.is_reimbursed = val })
+  targets.forEach(item => { item.is_reimbursed = val; });
   try {
     // 并发调用（后端暂未提供批量接口）
     const settled = await Promise.allSettled(
-      targets.map(item => invoiceStore.updateInvoice(item.id, { is_reimbursed: val }))
-    )
-    const succeeded = settled.filter(r => r.status === 'fulfilled').length
-    const failed = total - succeeded
-    selectedItems.value = []
+      targets.map(item => invoiceStore.updateInvoice(item.id, { is_reimbursed: val })),
+    );
+    const succeeded = settled.filter(r => r.status === "fulfilled").length;
+    const failed = total - succeeded;
+    selectedItems.value = [];
     if (failed === 0) {
-      notify(`已成功${val ? '标记' : '取消'} ${succeeded} 张发票的报销状态`, 'success')
+      notify(`已成功${val ? "标记" : "取消"} ${succeeded} 张发票的报销状态`, "success");
     } else if (succeeded === 0) {
       // 全部失败 —— 回滚乐观更新
-      targets.forEach(item => { item.is_reimbursed = !val })
-      notify(`操作失败，请稍后重试（${failed}/${total}）`, 'error')
+      targets.forEach(item => { item.is_reimbursed = !val; });
+      notify(`操作失败，请稍后重试（${failed}/${total}）`, "error");
     } else {
-      notify(`部分成功：成功 ${succeeded} 张，失败 ${failed} 张`, 'warning')
+      notify(`部分成功：成功 ${succeeded} 张，失败 ${failed} 张`, "warning");
     }
   } catch (e) {
-    targets.forEach(item => { item.is_reimbursed = !val })
-    console.error('批量更新报销状态失败:', e)
-    notify('批量更新失败: ' + (e.message || '未知错误'), 'error')
+    targets.forEach(item => { item.is_reimbursed = !val; });
+    console.error("批量更新报销状态失败:", e);
+    notify("批量更新失败: " + (e.message || "未知错误"), "error");
   } finally {
-    batchToggling.value = false
-    batchToggleProgress.value = { done: 0, total: 0 }
+    batchToggling.value = false;
+    batchToggleProgress.value = { done: 0, total: 0 };
   }
-}
+};
 
 const batchExport = () => {
-  const ids = selectedItems.value.map(i => i.id)
-  const params = new URLSearchParams()
-  params.set('format', 'xlsx')
-  params.set('summarize', exportSummarize.value.toString())
-  ids.forEach(id => params.append('ids', id))
-  window.open(`/api/invoices/export?${params.toString()}`, '_blank')
-}
+  const ids = selectedItems.value.map(i => i.id);
+  const params = new URLSearchParams();
+  params.set("format", "xlsx");
+  params.set("summarize", exportSummarize.value.toString());
+  ids.forEach(id => params.append("ids", id));
+  window.open(`/api/invoices/export?${params.toString()}`, "_blank");
+};
 
 const batchDeleteConfirm = () => {
-  batchDeleteTarget.value = [...selectedItems.value]
-  batchDeleteDialog.value = true
-}
+  batchDeleteTarget.value = [...selectedItems.value];
+  batchDeleteDialog.value = true;
+};
 
 const doBatchDelete = async () => {
-  batchDeleting.value = true
+  batchDeleting.value = true;
   try {
     for (const item of batchDeleteTarget.value) {
-      await invoiceStore.deleteInvoice(item.id)
+      await invoiceStore.deleteInvoice(item.id);
     }
-    batchDeleteDialog.value = false
-    selectedItems.value = []
-    notify('批量删除成功', 'success')
-    await loadInvoices()
+    batchDeleteDialog.value = false;
+    selectedItems.value = [];
+    notify("批量删除成功", "success");
+    await loadInvoices();
   } catch (e) {
-    console.error('批量删除失败:', e)
-    notify('删除失败: ' + (e.message || '未知错误'), 'error')
+    console.error("批量删除失败:", e);
+    notify("删除失败: " + (e.message || "未知错误"), "error");
   } finally {
-    batchDeleting.value = false
+    batchDeleting.value = false;
   }
-}
+};
 
 // ── 导出对话框 ──
 const doExport = async () => {
-  exporting.value = true
+  exporting.value = true;
   try {
-    const params = new URLSearchParams()
-    params.set('format', exportFormat.value)
-    params.set('summarize', exportSummarize.value.toString())
-    if (exportScope.value === 'current') {
+    const params = new URLSearchParams();
+    params.set("format", exportFormat.value);
+    params.set("summarize", exportSummarize.value.toString());
+    if (exportScope.value === "current") {
       Object.entries(buildParams()).forEach(([k, v]) => {
-        if (v !== undefined && v !== '') params.set(k, v)
-      })
-    } else if (exportScope.value === 'reimbursed') {
-      params.set('is_reimbursed', 'true')
-    } else if (exportScope.value === 'unreimbursed') {
-      params.set('is_reimbursed', 'false')
+        if (v !== undefined && v !== "") params.set(k, v);
+      });
+    } else if (exportScope.value === "reimbursed") {
+      params.set("is_reimbursed", "true");
+    } else if (exportScope.value === "unreimbursed") {
+      params.set("is_reimbursed", "false");
     }
-    window.open(`/api/invoices/export?${params.toString()}`, '_blank')
-    exportDialog.value = false
+    window.open(`/api/invoices/export?${params.toString()}`, "_blank");
+    exportDialog.value = false;
   } finally {
-    exporting.value = false
+    exporting.value = false;
   }
-}
+};
 
 onMounted(async () => {
-  await loadCategories()
-  await loadInvoices()
-})
+  await loadCategories();
+  await loadInvoices();
+});
 </script>
 
 <style scoped>

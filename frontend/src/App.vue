@@ -1,6 +1,10 @@
 <template>
   <v-app>
-    <v-app-bar app color="primary" dark>
+    <v-app-bar
+      app
+      color="primary"
+      dark
+    >
       <v-app-bar-nav-icon @click="drawer = !drawer" />
       <v-toolbar-title>发票管理系统</v-toolbar-title>
       <v-spacer />
@@ -21,21 +25,38 @@
         @blur="searchFocused = false"
       >
         <template #append-inner>
-          <kbd class="search-shortcut" v-if="!searchFocused">Ctrl+K</kbd>
+          <kbd
+            v-if="!searchFocused"
+            class="search-shortcut"
+          >Ctrl+K</kbd>
         </template>
       </v-text-field>
       <v-spacer />
-      <v-btn icon @click="toggleTheme">
+      <v-btn
+        icon
+        @click="toggleTheme"
+      >
         <v-icon>{{ themeIcon }}</v-icon>
       </v-btn>
-      <v-btn icon @click="refreshData">
+      <v-btn
+        icon
+        @click="refreshData"
+      >
         <v-icon>mdi-refresh</v-icon>
       </v-btn>
     </v-app-bar>
 
     <!-- 侧边导航（手动控制折叠） -->
-    <v-navigation-drawer v-model="drawer" app temporary width="260">
-      <v-list density="compact" nav>
+    <v-navigation-drawer
+      v-model="drawer"
+      app
+      temporary
+      width="260"
+    >
+      <v-list
+        density="compact"
+        nav
+      >
         <!-- 工作台 -->
         <v-list-item
           to="/"
@@ -54,7 +75,10 @@
           title="发票管理"
           @click="toggleGroup('invoices')"
         />
-        <div v-show="isGroupOpen('invoices')" class="nav-sub-group">
+        <div
+          v-show="isGroupOpen('invoices')"
+          class="nav-sub-group"
+        >
           <v-list-item
             to="/invoices"
             prepend-icon="mdi-format-list-bulleted"
@@ -80,7 +104,10 @@
           title="数据汇总"
           @click="toggleGroup('reports')"
         />
-        <div v-show="isGroupOpen('reports')" class="nav-sub-group">
+        <div
+          v-show="isGroupOpen('reports')"
+          class="nav-sub-group"
+        >
           <v-list-item
             to="/reports/invoice"
             prepend-icon="mdi-file-table"
@@ -108,7 +135,10 @@
           title="基础数据"
           @click="toggleGroup('master-data')"
         />
-        <div v-show="isGroupOpen('master-data')" class="nav-sub-group">
+        <div
+          v-show="isGroupOpen('master-data')"
+          class="nav-sub-group"
+        >
           <v-list-item
             to="/master-data/categories"
             prepend-icon="mdi-tag"
@@ -149,7 +179,10 @@
 
     <!-- 主内容区 -->
     <v-main>
-      <v-container fluid class="pa-4 pt-2">
+      <v-container
+        fluid
+        class="pa-4 pt-2"
+      >
         <!-- 面包屑导航 -->
         <v-breadcrumbs
           v-if="breadcrumbs.length > 1"
@@ -158,7 +191,12 @@
           class="px-0 pt-0 text-caption"
         >
           <template #divider>
-            <v-icon size="small" class="mx-1">mdi-chevron-right</v-icon>
+            <v-icon
+              size="small"
+              class="mx-1"
+            >
+              mdi-chevron-right
+            </v-icon>
           </template>
           <template #item="{ item, index }">
             <v-breadcrumbs-item
@@ -178,14 +216,22 @@
     </v-main>
 
     <!-- 底部信息 -->
-    <v-footer app color="primary" dark height="36">
+    <v-footer
+      app
+      color="primary"
+      dark
+      height="36"
+    >
       <v-spacer />
       <span class="text-caption">&copy; 2026 发票管理系统 v2.0.0</span>
       <v-spacer />
     </v-footer>
 
     <!-- 全局搜索对话框 -->
-    <v-dialog v-model="searchDialog" max-width="600">
+    <v-dialog
+      v-model="searchDialog"
+      max-width="600"
+    >
       <v-card>
         <v-card-text class="pa-4">
           <v-text-field
@@ -202,27 +248,44 @@
             @update:model-value="debouncedSearch"
           >
             <template #append-inner>
-              <v-btn variant="text" size="small" @click="searchDialog = false" icon="mdi-close" />
+              <v-btn
+                variant="text"
+                size="small"
+                icon="mdi-close"
+                @click="searchDialog = false"
+              />
             </template>
           </v-text-field>
         </v-card-text>
 
-        <v-divider></v-divider>
+        <v-divider />
 
         <!-- 搜索结果 -->
-        <v-list v-if="searchResults.length > 0" lines="three" max-height="450" class="overflow-y-auto">
+        <v-list
+          v-if="searchResults.length > 0"
+          lines="three"
+          max-height="450"
+          class="overflow-y-auto"
+        >
           <v-list-item
             v-for="item in searchResults"
             :key="item.id"
             :to="`/invoices/${item.id}`"
             @click="searchDialog = false"
           >
-            <template v-slot:prepend>
-              <v-icon color="primary">mdi-receipt</v-icon>
+            <template #prepend>
+              <v-icon color="primary">
+                mdi-receipt
+              </v-icon>
             </template>
             <v-list-item-title class="text-body-2">
               {{ item.invoice_number }}
-              <v-chip size="x-small" class="ml-2" variant="tonal" :color="item.is_reimbursed ? 'success' : 'warning'">
+              <v-chip
+                size="x-small"
+                class="ml-2"
+                variant="tonal"
+                :color="item.is_reimbursed ? 'success' : 'warning'"
+              >
                 {{ item.is_reimbursed ? '已报销' : '未报销' }}
               </v-chip>
             </v-list-item-title>
@@ -231,13 +294,21 @@
               &nbsp;|&nbsp; {{ item.counterpart?.name || '未知单位' }}
             </v-list-item-subtitle>
             <!-- 匹配字段标签 + 高亮片段 -->
-            <div v-if="item.matches?.length" class="mt-1">
+            <div
+              v-if="item.matches?.length"
+              class="mt-1"
+            >
               <div
                 v-for="(m, mi) in item.matches"
                 :key="mi"
                 class="d-flex align-start text-caption ga-1 mb-1"
               >
-                <v-chip size="x-small" variant="flat" :color="matchColor(m.field)" class="mr-1 flex-shrink-0">
+                <v-chip
+                  size="x-small"
+                  variant="flat"
+                  :color="matchColor(m.field)"
+                  class="mr-1 flex-shrink-0"
+                >
                   {{ m.label }}
                 </v-chip>
                 <span
@@ -249,15 +320,37 @@
           </v-list-item>
         </v-list>
 
-        <div v-else-if="searchDialogQuery && !searchLoading" class="text-center py-6">
-          <v-icon size="40" color="grey">mdi-file-search-outline</v-icon>
-          <div class="text-body-2 mt-2 text-grey">未找到匹配的发票</div>
+        <div
+          v-else-if="searchDialogQuery && !searchLoading"
+          class="text-center py-6"
+        >
+          <v-icon
+            size="40"
+            color="grey"
+          >
+            mdi-file-search-outline
+          </v-icon>
+          <div class="text-body-2 mt-2 text-grey">
+            未找到匹配的发票
+          </div>
         </div>
 
-        <div v-else-if="!searchDialogQuery" class="text-center py-6">
-          <v-icon size="40" color="grey-lighten-1">mdi-magnify</v-icon>
-          <div class="text-body-2 mt-2 text-grey">输入关键词搜索发票</div>
-          <div class="text-caption text-grey mt-1">支持发票号码 / 单位名称 / 备注 / OCR原文</div>
+        <div
+          v-else-if="!searchDialogQuery"
+          class="text-center py-6"
+        >
+          <v-icon
+            size="40"
+            color="grey-lighten-1"
+          >
+            mdi-magnify
+          </v-icon>
+          <div class="text-body-2 mt-2 text-grey">
+            输入关键词搜索发票
+          </div>
+          <div class="text-caption text-grey mt-1">
+            支持发票号码 / 单位名称 / 备注 / OCR原文
+          </div>
         </div>
       </v-card>
     </v-dialog>
@@ -265,159 +358,158 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useTheme } from 'vuetify'
-import { useRoute, useRouter } from 'vue-router'
-import { invoiceApi, searchApi } from '@/api'
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
+import { useTheme } from "vuetify";
+import { useRoute } from "vue-router";
+import { searchApi } from "@/api";
 
-const drawer = ref(false)
-const theme = useTheme()
-const route = useRoute()
-const router = useRouter()
+const drawer = ref(false);
+const theme = useTheme();
+const route = useRoute();
 
 // ── 主题切换 ──
 const themeIcon = computed(() =>
-  theme.global.current.value.dark ? 'mdi-weather-sunny' : 'mdi-weather-night'
-)
+  theme.global.current.value.dark ? "mdi-weather-sunny" : "mdi-weather-night",
+);
 
 const toggleTheme = () => {
-  theme.global.name.value = theme.global.current.value.dark ? 'light' : 'dark'
-}
+  theme.global.name.value = theme.global.current.value.dark ? "light" : "dark";
+};
 
 const refreshData = () => {
-  window.location.reload()
-}
+  window.location.reload();
+};
 
 // ── 导航分组手动折叠 ──
-const openGroups = ref(new Set())
+const openGroups = ref(new Set());
 
 // 根据当前路由自动初始化展开组
 watch(
   () => route.path,
   (path) => {
-    const next = new Set(openGroups.value)
-    if (path.startsWith('/invoices')) next.add('invoices')
-    if (path.startsWith('/reports')) next.add('reports')
-    if (path.startsWith('/master-data')) next.add('master-data')
-    openGroups.value = next
+    const next = new Set(openGroups.value);
+    if (path.startsWith("/invoices")) next.add("invoices");
+    if (path.startsWith("/reports")) next.add("reports");
+    if (path.startsWith("/master-data")) next.add("master-data");
+    openGroups.value = next;
   },
-  { immediate: true, deep: false }
-)
+  { immediate: true, deep: false },
+);
 
-const isGroupOpen = (key) => openGroups.value.has(key)
+const isGroupOpen = (key) => openGroups.value.has(key);
 
 const toggleGroup = (key) => {
-  const next = new Set(openGroups.value)
+  const next = new Set(openGroups.value);
   if (next.has(key)) {
-    next.delete(key)
+    next.delete(key);
   } else {
-    next.add(key)
+    next.add(key);
   }
-  openGroups.value = next
-}
+  openGroups.value = next;
+};
 
 // ── 面包屑 ──
 const breadcrumbs = computed(() => {
   const items = route.matched
     .filter((r) => r.meta.title)
-    .map((r) => ({ title: r.meta.title, to: r.path }))
+    .map((r) => ({ title: r.meta.title, to: r.path }));
 
   // Flat routes: prepend parentTitle if set (e.g. "基础数据 > 消费分类")
-  const parent = route.meta.parentTitle
+  const parent = route.meta.parentTitle;
   if (parent && items.length === 1) {
-    items.unshift({ title: parent, to: '#' })
+    items.unshift({ title: parent, to: "#" });
   }
-  return items
-})
+  return items;
+});
 
 // ── 全局搜索 ──
-const searchField = ref(null)
-const globalSearchQuery = ref('')
-const searchFocused = ref(false)
-const searchDialog = ref(false)
-const searchDialogQuery = ref('')
-const searchResults = ref([])
-const searchLoading = ref(false)
-const searchTimer = ref(null)
+const searchField = ref(null);
+const globalSearchQuery = ref("");
+const searchFocused = ref(false);
+const searchDialog = ref(false);
+const searchDialogQuery = ref("");
+const searchResults = ref([]);
+const searchLoading = ref(false);
+const searchTimer = ref(null);
 
-const fmt = (v) => (v != null) ? Number(v).toFixed(2) : '0.00'
+const fmt = (v) => (v != null) ? Number(v).toFixed(2) : "0.00";
 
 // 匹配字段显示颜色
 const matchColor = (field) => {
   const map = {
-    invoice_number: 'primary',
-    invoice_code: 'indigo',
-    check_code: 'teal',
-    counterpart: 'orange',
-    remark: 'purple',
-    raw_text: 'blue-grey',
-  }
-  return map[field] || 'grey'
-}
+    invoice_number: "primary",
+    invoice_code: "indigo",
+    check_code: "teal",
+    counterpart: "orange",
+    remark: "purple",
+    raw_text: "blue-grey",
+  };
+  return map[field] || "grey";
+};
 
 const openSearchDialog = () => {
-  searchDialogQuery.value = globalSearchQuery.value
-  searchDialog.value = true
-  if (searchDialogQuery.value) performSearch()
-}
+  searchDialogQuery.value = globalSearchQuery.value;
+  searchDialog.value = true;
+  if (searchDialogQuery.value) performSearch();
+};
 
 const performSearch = async () => {
   if (!searchDialogQuery.value.trim()) {
-    searchResults.value = []
-    return
+    searchResults.value = [];
+    return;
   }
-  searchLoading.value = true
+  searchLoading.value = true;
   try {
     const result = await searchApi.search(
       searchDialogQuery.value.trim(),
-      20
-    )
-    searchResults.value = result.items || []
+      20,
+    );
+    searchResults.value = result.items || [];
   } catch (e) {
-    console.error('搜索失败:', e)
-    searchResults.value = []
+    console.error("搜索失败:", e);
+    searchResults.value = [];
   } finally {
-    searchLoading.value = false
+    searchLoading.value = false;
   }
-}
+};
 
 const debouncedSearch = () => {
-  clearTimeout(searchTimer.value)
+  clearTimeout(searchTimer.value);
   searchTimer.value = setTimeout(() => {
     if (searchDialogQuery.value.trim()) {
-      performSearch()
+      performSearch();
     } else {
-      searchResults.value = []
+      searchResults.value = [];
     }
-  }, 300)
-}
+  }, 300);
+};
 
 // 全局快捷键
 const onKeyDown = (e) => {
   // 跳过输入框内的按键
-  const tag = e.target.tagName
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+  const tag = e.target.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
 
   // Ctrl+K — 打开搜索
-  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-    e.preventDefault()
-    searchDialog.value = true
+  if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+    e.preventDefault();
+    searchDialog.value = true;
     setTimeout(() => {
-      const input = document.querySelector('.v-dialog .v-field__input input')
-      if (input) input.focus()
-    }, 100)
-    return
+      const input = document.querySelector(".v-dialog .v-field__input input");
+      if (input) input.focus();
+    }, 100);
+    return;
   }
 
-  }
+  };
 
 // 注册/移除全局快捷键
 onMounted(() => {
-  window.addEventListener('keydown', onKeyDown)
-})
+  window.addEventListener("keydown", onKeyDown);
+});
 onUnmounted(() => {
-  window.removeEventListener('keydown', onKeyDown)
-})
+  window.removeEventListener("keydown", onKeyDown);
+});
 </script>
 
 <style>
