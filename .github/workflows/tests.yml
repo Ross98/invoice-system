@@ -89,7 +89,9 @@ jobs:
 
       - name: Install dependencies
         working-directory: frontend
-        run: npm ci
+        # 用 npm install (而非 ci) 让 npm 根据目标平台拉对应 esbuild binary,
+        # 避免 Windows 提交的 lock 文件锁了 Linux native modules
+        run: npm install --no-audit --no-fund
 
       - name: Run ESLint
         working-directory: frontend
