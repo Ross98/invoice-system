@@ -12,7 +12,7 @@ const api = axios.create({
 });
 
 // 长操作 axios 实例(OCR 大文件、导出等)
-const axiosLong = axios.create({
+export const axiosLong = axios.create({
   baseURL: "/api",
   timeout: TIMEOUT_LONG,
   headers: {

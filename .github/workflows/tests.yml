@@ -95,6 +95,10 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
+      - name: Run vitest unit tests
+        working-directory: frontend
+        run: npm test
+
       - name: Build (production)
         # 验证 Vite 生产构建无错,提前发现 import/资源/类型问题
         working-directory: frontend
