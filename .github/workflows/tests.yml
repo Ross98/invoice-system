@@ -95,10 +95,19 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
-      # 暂时不跑 build,等 Phase 3 修复后端兼容性再加
-      # - name: Build
-      #   working-directory: frontend
-      #   run: npm run build
+      - name: Build (production)
+        # 验证 Vite 生产构建无错,提前发现 import/资源/类型问题
+        working-directory: frontend
+        run: npm run build
+
+      - name: Upload build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          retention-days: 7
+          if-no-files-found: ignore
 
   # ============= 必需检查(两个 job 都过才算绿) =============
   required:
