@@ -1,8 +1,10 @@
 """发票管理 API 路由"""
 
+import contextlib
 import copy
 from datetime import date, datetime
 import io
+import logging
 from pathlib import Path
 from urllib.parse import quote
 
@@ -30,14 +32,22 @@ from ..schemas.invoice import (
     Counterpart as CounterpartSchema,
 )
 from ..schemas.invoice import (
-    Invoice as InvoiceSchema,
+    InvoiceFileResponse as InvoiceFileSchema,
 )
 from ..schemas.invoice import (
-    InvoiceFile as InvoiceFileSchema,
+    InvoiceResponse as InvoiceSchema,
 )
-from ..services.file_storage import delete_file, retrieve_file, store_file
+from ..services.file_storage import (
+    _MIME_TO_EXTS,
+    MAGIC_LEN,
+    _detect_mime,
+    delete_file,
+    retrieve_file,
+    stream_upload,
+)
 
 router = APIRouter(prefix="/api", tags=["发票管理"])
+logger = logging.getLogger(__name__)
 
 
 # ==================== 发票 CRUD ====================
@@ -45,16 +55,21 @@ router = APIRouter(prefix="/api", tags=["发票管理"])
 @router.post("/invoices", response_model=InvoiceSchema, status_code=201)
 def create_invoice(invoice_data: InvoiceCreate, db: Session = Depends(get_db)):
     """创建发票（含明细）"""
-    invoice = Invoice(**invoice_data.model_dump(exclude={"details"}))
-    db.add(invoice)
+    try:
+        invoice = Invoice(**invoice_data.model_dump(exclude={"details"}))
+        db.add(invoice)
 
-    for detail_data in invoice_data.details:
-        detail = InvoiceDetail(invoice=invoice, **detail_data.model_dump())
-        db.add(detail)
+        for detail_data in invoice_data.details:
+            detail = InvoiceDetail(invoice=invoice, **detail_data.model_dump())
+            db.add(detail)
 
-    db.commit()
-    db.refresh(invoice)
-    return invoice
+        db.commit()
+        db.refresh(invoice)
+        return invoice
+    except Exception as e:
+        db.rollback()
+        logger.exception("创建发票失败")
+        raise HTTPException(status_code=500, detail="创建发票失败") from e
 
 
 @router.get("/invoices", response_model=PaginatedResponse[InvoiceSchema])
@@ -135,23 +150,28 @@ def update_invoice(invoice_id: int, invoice_data: InvoiceUpdate, db: Session = D
     if not invoice:
         raise HTTPException(status_code=404, detail="发票不存在")
 
-    # 更新发票主字段
-    update_dict = invoice_data.model_dump(exclude={"details"}, exclude_unset=True)
-    for key, value in update_dict.items():
-        setattr(invoice, key, value)
+    try:
+        # 更新发票主字段
+        update_dict = invoice_data.model_dump(exclude={"details"}, exclude_unset=True)
+        for key, value in update_dict.items():
+            setattr(invoice, key, value)
 
-    # 更新明细（如果提供了）
-    if invoice_data.details is not None:
-        # 删除旧明细
-        db.query(InvoiceDetail).filter(InvoiceDetail.invoice_id == invoice_id).delete()
-        # 添加新明细
-        for detail_data in invoice_data.details:
-            detail = InvoiceDetail(invoice_id=invoice_id, **detail_data.model_dump())
-            db.add(detail)
+        # 更新明细（如果提供了）
+        if invoice_data.details is not None:
+            # 删除旧明细
+            db.query(InvoiceDetail).filter(InvoiceDetail.invoice_id == invoice_id).delete()
+            # 添加新明细
+            for detail_data in invoice_data.details:
+                detail = InvoiceDetail(invoice_id=invoice_id, **detail_data.model_dump())
+                db.add(detail)
 
-    db.commit()
-    db.refresh(invoice)
-    return invoice
+        db.commit()
+        db.refresh(invoice)
+        return invoice
+    except Exception as e:
+        db.rollback()
+        logger.exception("更新发票失败")
+        raise HTTPException(status_code=500, detail="更新发票失败") from e
 
 
 @router.delete("/invoices/{invoice_id}", status_code=204)
@@ -161,12 +181,17 @@ def delete_invoice(invoice_id: int, db: Session = Depends(get_db)):
     if not invoice:
         raise HTTPException(status_code=404, detail="发票不存在")
 
-    # 清理本地文件
-    for file in invoice.files:
-        delete_file(file.storage_mode, file.file_path)
+    # 先收集待删文件记录（不立即删物理文件，避免 DB 回滚后文件已删）
+    file_records = list(invoice.files)
 
     db.delete(invoice)
     db.commit()
+
+    # 事务提交后再清理物理文件；任一失败不影响已提交的删除结果
+    for file in file_records:
+        # 文件删除失败不影响主流程，留待后续清理任务
+        with contextlib.suppress(Exception):
+            delete_file(file)
 
 
 # ==================== 发票文件管理 ====================
@@ -181,26 +206,42 @@ def upload_invoice_file(invoice_id: int, file: UploadFile = File(...), db: Sessi
     if not file.filename:
         raise HTTPException(status_code=400, detail="文件名不能为空")
 
-    # 读取文件内容
-    content = file.file.read()
-    file_size = len(content)
+    # MIME 嗅探：先读前 16 字节检测魔数，再 seek(0) 复位供流式拷贝使用
+    head = file.file.read(MAGIC_LEN)
+    try:
+        file.file.seek(0)
+    except OSError:
+        # 某些流式源不可 seek，回退到一次性读取（极少触发）
+        file.file.seek(0, 2)
+        remaining = file.file.tell()
+        file.file.seek(0)
+        head = head[: min(len(head), remaining)]
 
-    # 检查文件大小
-    from ..config import settings
-    if file_size > settings.max_file_size_bytes:
+    detected_mime = _detect_mime(head)
+    if not detected_mime:
         raise HTTPException(
             status_code=400,
-            detail=f"文件大小超过限制 ({settings.MAX_FILE_SIZE_MB}MB)"
+            detail=f"不支持的文件类型或文件已损坏: {Path(file.filename).suffix.lower()}",
         )
 
-    # 获取文件类型
+    # 后缀必须与嗅探到的 MIME 匹配，防止「改后缀绕过」
     ext = Path(file.filename).suffix.lower().lstrip(".")
-    allowed_types = {"pdf", "png", "jpg", "jpeg", "bmp", "tiff", "tif"}
-    if ext not in allowed_types:
-        raise HTTPException(status_code=400, detail=f"不支持的文件类型: {ext}")
+    allowed_exts = _MIME_TO_EXTS.get(detected_mime, set())
+    if ext not in allowed_exts:
+        raise HTTPException(
+            status_code=400,
+            detail=f"文件扩展名 {ext} 与实际类型 {detected_mime} 不匹配",
+        )
 
-    # 存储文件
-    storage_mode, file_path, blob_data = store_file(content, file.filename, invoice_id)
+    # 流式分块写入（CHUNK_SIZE=1MB），写入过程强制 MAX_FILE_SIZE 上限
+    from ..config import settings
+    max_bytes = settings.max_file_size_bytes
+    try:
+        storage_mode, file_size, file_path, blob_data = stream_upload(
+            file.file, file.filename, invoice_id, max_bytes
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="文件存储失败") from e
 
     # 创建文件记录
     invoice_file = InvoiceFile(
@@ -212,9 +253,14 @@ def upload_invoice_file(invoice_id: int, file: UploadFile = File(...), db: Sessi
         file_path=file_path,
         blob_data=blob_data,
     )
-    db.add(invoice_file)
-    db.commit()
-    db.refresh(invoice_file)
+    try:
+        db.add(invoice_file)
+        db.commit()
+        db.refresh(invoice_file)
+    except Exception as e:
+        db.rollback()
+        logger.exception("文件记录保存失败")
+        raise HTTPException(status_code=500, detail="文件记录保存失败") from e
 
     return invoice_file
 
@@ -243,7 +289,8 @@ def download_invoice_file(invoice_id: int, file_id: int, db: Session = Depends(g
             file_record.blob_data,
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"读取文件失败: {e!s}") from e
+        logger.exception("读取文件失败: file_id=%s", file_record.id)
+        raise HTTPException(status_code=500, detail="文件读取失败") from e
 
     media_types = {
         "PDF": "application/pdf",
@@ -270,7 +317,7 @@ def delete_invoice_file(invoice_id: int, file_id: int, db: Session = Depends(get
     if not file_record:
         raise HTTPException(status_code=404, detail="文件不存在")
 
-    delete_file(file_record.storage_mode, file_record.file_path)
+    delete_file(file_record)
     db.delete(file_record)
     db.commit()
 
@@ -369,7 +416,9 @@ def export_invoices(invoice_ids: list[int] = Body(...), db: Session = Depends(ge
     if not invoice_ids:
         raise HTTPException(status_code=400, detail="请选择至少一张发票")
 
-    invoices = db.query(Invoice).filter(Invoice.id.in_(invoice_ids)).order_by(
+    invoices = db.query(Invoice).options(
+        selectinload(Invoice.category)
+    ).filter(Invoice.id.in_(invoice_ids)).order_by(
         Invoice.invoice_date.asc()
     ).all()
     if not invoices:
@@ -377,13 +426,14 @@ def export_invoices(invoice_ids: list[int] = Body(...), db: Session = Depends(ge
 
     # —— 按分类汇总：同分类合并为一条，金额求和 ——
     cat_order = []          # 保持分类首次出现顺序
-    cat_groups = {}         # category_name -> {amount, remarks, dates}
+    cat_groups = {}         # category_name -> {amount, count, remarks, dates}
     for inv in invoices:
         cat_name = inv.category.name if (inv.category and inv.category.name) else "其他"
         if cat_name not in cat_groups:
-            cat_groups[cat_name] = {"amount": 0.0, "remarks": [], "dates": []}
+            cat_groups[cat_name] = {"amount": 0.0, "count": 0, "remarks": [], "dates": []}
             cat_order.append(cat_name)
         cat_groups[cat_name]["amount"] += float(inv.total_with_tax or 0)
+        cat_groups[cat_name]["count"] += 1
         if inv.remark:
             cat_groups[cat_name]["remarks"].append(inv.remark.strip())
         if inv.invoice_date:
@@ -412,6 +462,7 @@ def export_invoices(invoice_ids: list[int] = Body(...), db: Session = Depends(ge
             "category": cat_name,
             "date_str": date_str,
             "amount": round(g["amount"], 2),
+            "count": g["count"],
             "remark": remark_str,
         })
 
@@ -478,8 +529,9 @@ def export_invoices(invoice_ids: list[int] = Body(...), db: Session = Depends(ge
         ws.cell(row=row, column=2, value=sr["date_str"])  # B: 日期（月份）
         ws.cell(row=row, column=3, value=sr["category"])  # C: 内容（分类）
         ws.cell(row=row, column=4, value=sr["amount"])    # D: 金额（求和）
-        ws.cell(row=row, column=5, value=sr["remark"])    # E: 备注
-        ws.cell(row=row, column=6, value=sr["category"])  # F: 费用类别
+        ws.cell(row=row, column=5, value=sr["count"])     # E: 发票数量
+        ws.cell(row=row, column=6, value=sr["remark"])    # F: 备注
+        ws.cell(row=row, column=7, value=sr["category"])  # G: 费用类别
 
         # 应用样式（细线边框 + 居中 + 备注自动换行）
         for col_idx, style in template_styles.items():
@@ -489,15 +541,15 @@ def export_invoices(invoice_ids: list[int] = Body(...), db: Session = Depends(ge
             if style.get("fill"):
                 cell.fill = copy.copy(style["fill"])
             cell.border = thin_border
-            # E列（备注）居中+自动换行，其他列居中
-            if col_idx == 5:
+            # F列（备注）居中+自动换行，其他列居中
+            if col_idx == 6:
                 cell.alignment = Alignment(
                     horizontal="center", vertical="center", wrap_text=True
                 )
             else:
                 cell.alignment = Alignment(horizontal="center", vertical="center")
-            # D列（金额）保留数字格式，其他列用模板格式
-            if col_idx != 4:
+            # D列（金额）和 E列（发票数量）保留数字格式，其他列用模板格式
+            if col_idx not in (4, 5):
                 cell.number_format = style.get("number_format", "@")
 
     # 写入新合计行
@@ -512,6 +564,7 @@ def export_invoices(invoice_ids: list[int] = Body(...), db: Session = Depends(ge
         ws.unmerge_cells(mc_str)
     ws.cell(row=summary_new_row, column=3, value="合计")
     ws.cell(row=summary_new_row, column=4, value=f"=SUM(D{data_start_row}:D{summary_new_row - 1})")
+    ws.cell(row=summary_new_row, column=5, value=f"=SUM(E{data_start_row}:E{summary_new_row - 1})")
     for col_idx, style in template_styles.items():
         cell = ws.cell(row=summary_new_row, column=col_idx)
         cell.font = copy.copy(style["font"])

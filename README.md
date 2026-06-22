@@ -2,7 +2,7 @@
 
 基于 OCR 的发票识别与报销管理工具，支持电子发票、出租车票、火车票的自动识别、分类汇总和 Excel 导出。
 
-> **最新版本**: [v2.0.0](https://github.com/Ross98/invoice-system/releases/tag/v2.0.0) — 全局搜索增强 + 代码审查体系
+> **最新版本**: [v2.0.3](https://github.com/Ross98/invoice-system/releases/tag/v2.0.3) — 发票汇总新增发票数量统计
 
 ## 技术栈
 
@@ -86,6 +86,9 @@ cd backend
 # 后端自动修复
 .venv\Scripts\ruff.exe check --fix app/
 
+# 后端测试
+.venv\Scripts\python.exe -m pytest tests/ -v
+
 # 前端 Lint
 cd frontend
 npm run lint
@@ -93,6 +96,14 @@ npm run lint
 # 前端格式化
 npm run format
 ```
+
+### CI/CD
+
+PR 与 push 到 `main` / `V2.0` 分支时会自动触发 [Tests workflow](.github/workflows/tests.yml):
+
+- **Backend job** (Windows runner, Python 3.12): 安装依赖 → pytest + coverage → ruff lint
+- **Frontend job** (Ubuntu, Node 20): `npm ci` → `npm run lint`
+- 两个 job 都通过才算 ✅,任一失败会阻止合并
 
 详见 [代码审查标准](docs/CODE_REVIEW_STANDARDS.md)。
 

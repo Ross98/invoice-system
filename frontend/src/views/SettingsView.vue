@@ -1,29 +1,56 @@
 <template>
   <div>
     <!-- 全局反馈 -->
-    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3500" location="top">
+    <v-snackbar
+      v-model="snackbar.show"
+      :color="snackbar.color"
+      timeout="3500"
+      location="top"
+    >
       {{ snackbar.message }}
       <template #actions>
-        <v-btn variant="text" @click="snackbar.show = false">关闭</v-btn>
+        <v-btn
+          variant="text"
+          @click="snackbar.show = false"
+        >
+          关闭
+        </v-btn>
       </template>
     </v-snackbar>
 
     <!-- OCR 设置 -->
     <v-row>
-      <v-col cols="12" md="6">
+      <v-col
+        cols="12"
+        md="6"
+      >
         <v-card :loading="savingOcr">
           <v-card-title class="d-flex align-center">
-            <v-icon class="mr-2">mdi-text-recognition</v-icon>
+            <v-icon class="mr-2">
+              mdi-text-recognition
+            </v-icon>
             OCR 设置
           </v-card-title>
           <v-card-text>
-            <v-alert :type="ocrStatus?.available ? 'success' : 'warning'" variant="tonal" class="mb-4" density="compact">
-              <div v-if="ocrStatus?.available" class="d-flex align-center">
-                <v-icon class="mr-2">mdi-check-circle</v-icon>
+            <v-alert
+              :type="ocrStatus?.available ? 'success' : 'warning'"
+              variant="tonal"
+              class="mb-4"
+              density="compact"
+            >
+              <div
+                v-if="ocrStatus?.available"
+                class="d-flex align-center"
+              >
+                <v-icon class="mr-2">
+                  mdi-check-circle
+                </v-icon>
                 OCR 服务可用（{{ ocrStatus.engine }}）
               </div>
               <div v-else>
-                <v-icon class="mr-2">mdi-alert</v-icon>
+                <v-icon class="mr-2">
+                  mdi-alert
+                </v-icon>
                 OCR 服务不可用：{{ ocrStatus?.message || '请检查 Tesseract 安装' }}
               </div>
             </v-alert>
@@ -76,7 +103,11 @@
           </v-card-text>
           <v-card-actions>
             <v-spacer />
-            <v-btn color="primary" @click="saveOcrSettings" :loading="savingOcr">
+            <v-btn
+              color="primary"
+              :loading="savingOcr"
+              @click="saveOcrSettings"
+            >
               保存 OCR 设置
             </v-btn>
           </v-card-actions>
@@ -84,10 +115,15 @@
       </v-col>
 
       <!-- 存储设置 -->
-      <v-col cols="12" md="6">
+      <v-col
+        cols="12"
+        md="6"
+      >
         <v-card :loading="savingStorage">
           <v-card-title class="d-flex align-center">
-            <v-icon class="mr-2">mdi-folder-cog</v-icon>
+            <v-icon class="mr-2">
+              mdi-folder-cog
+            </v-icon>
             文件存储设置
           </v-card-title>
           <v-card-text>
@@ -133,7 +169,11 @@
           </v-card-text>
           <v-card-actions>
             <v-spacer />
-            <v-btn color="primary" @click="saveStorageSettings" :loading="savingStorage">
+            <v-btn
+              color="primary"
+              :loading="savingStorage"
+              @click="saveStorageSettings"
+            >
               保存存储设置
             </v-btn>
           </v-card-actions>
@@ -146,39 +186,103 @@
       <v-col cols="12">
         <v-card>
           <v-card-title class="d-flex align-center">
-            <v-icon class="mr-2">mdi-database-cog</v-icon>
+            <v-icon class="mr-2">
+              mdi-database-cog
+            </v-icon>
             数据库管理
           </v-card-title>
           <v-card-text>
             <v-row>
-              <v-col cols="12" md="4">
-                <v-card variant="outlined" class="text-center pa-4" color="success">
-                  <div class="text-h6">数据库状态</div>
-                  <v-icon size="48" color="success" class="my-4">mdi-database-check</v-icon>
-                  <div class="text-body-1">连接正常</div>
+              <v-col
+                cols="12"
+                md="4"
+              >
+                <v-card
+                  variant="outlined"
+                  class="text-center pa-4"
+                  color="success"
+                >
+                  <div class="text-h6">
+                    数据库状态
+                  </div>
+                  <v-icon
+                    size="48"
+                    color="success"
+                    class="my-4"
+                  >
+                    mdi-database-check
+                  </v-icon>
+                  <div class="text-body-1">
+                    连接正常
+                  </div>
                   <div class="text-caption text-medium-emphasis mt-1">
                     {{ dbInfo }}
                   </div>
                 </v-card>
               </v-col>
-              <v-col cols="12" md="4">
-                <v-card variant="outlined" class="text-center pa-4">
-                  <div class="text-h6">备份</div>
-                  <v-icon size="48" color="info" class="my-4">mdi-backup-restore</v-icon>
-                  <div class="text-body-1 mb-4">下载数据库备份文件</div>
-                  <v-btn color="info" block @click="backupDatabase" :loading="backingUp">
-                    <v-icon start>mdi-download</v-icon>
+              <v-col
+                cols="12"
+                md="4"
+              >
+                <v-card
+                  variant="outlined"
+                  class="text-center pa-4"
+                >
+                  <div class="text-h6">
+                    备份
+                  </div>
+                  <v-icon
+                    size="48"
+                    color="info"
+                    class="my-4"
+                  >
+                    mdi-backup-restore
+                  </v-icon>
+                  <div class="text-body-1 mb-4">
+                    下载数据库备份文件
+                  </div>
+                  <v-btn
+                    color="info"
+                    block
+                    :loading="backingUp"
+                    @click="backupDatabase"
+                  >
+                    <v-icon start>
+                      mdi-download
+                    </v-icon>
                     备份
                   </v-btn>
                 </v-card>
               </v-col>
-              <v-col cols="12" md="4">
-                <v-card variant="outlined" class="text-center pa-4">
-                  <div class="text-h6">重置</div>
-                  <v-icon size="48" color="warning" class="my-4">mdi-alert-circle</v-icon>
-                  <div class="text-body-1 mb-4">清空所有数据</div>
-                  <v-btn color="warning" block @click="confirmReset">
-                    <v-icon start>mdi-delete</v-icon>
+              <v-col
+                cols="12"
+                md="4"
+              >
+                <v-card
+                  variant="outlined"
+                  class="text-center pa-4"
+                >
+                  <div class="text-h6">
+                    重置
+                  </div>
+                  <v-icon
+                    size="48"
+                    color="warning"
+                    class="my-4"
+                  >
+                    mdi-alert-circle
+                  </v-icon>
+                  <div class="text-body-1 mb-4">
+                    清空所有数据
+                  </div>
+                  <v-btn
+                    color="warning"
+                    block
+                    @click="confirmReset"
+                  >
+                    <v-icon start>
+                      mdi-delete
+                    </v-icon>
                     重置数据库
                   </v-btn>
                 </v-card>
@@ -190,11 +294,20 @@
     </v-row>
 
     <!-- 重置确认对话框 -->
-    <v-dialog v-model="resetDialog" max-width="500">
+    <v-dialog
+      v-model="resetDialog"
+      max-width="500"
+    >
       <v-card>
-        <v-card-title class="text-error">⚠️ 警告：重置数据库</v-card-title>
+        <v-card-title class="text-error">
+          ⚠️ 警告：重置数据库
+        </v-card-title>
         <v-card-text>
-          <v-alert type="error" variant="tonal" class="mb-4">
+          <v-alert
+            type="error"
+            variant="tonal"
+            class="mb-4"
+          >
             此操作将清空所有数据，包括：
             <ul class="mt-2">
               <li>所有发票记录</li>
@@ -213,12 +326,17 @@
         </v-card-text>
         <v-card-actions>
           <v-spacer />
-          <v-btn variant="text" @click="resetDialog = false">取消</v-btn>
+          <v-btn
+            variant="text"
+            @click="resetDialog = false"
+          >
+            取消
+          </v-btn>
           <v-btn
             color="error"
-            @click="resetDatabase"
             :disabled="confirmText !== 'RESET'"
             :loading="resetting"
+            @click="resetDatabase"
           >
             确认重置
           </v-btn>
@@ -229,93 +347,93 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { settingsApi, ocrApi } from '@/api'
-import { useRouter } from 'vue-router'
+import { ref, reactive, onMounted } from "vue";
+import { settingsApi, ocrApi } from "@/api";
+import { useRouter } from "vue-router";
 
-const router = useRouter()
+const router = useRouter();
 
 // ── 状态 ──
-const savingOcr = ref(false)
-const savingStorage = ref(false)
-const backingUp = ref(false)
-const resetting = ref(false)
-const resetDialog = ref(false)
-const confirmText = ref('')
-const dbInfo = ref('')
+const savingOcr = ref(false);
+const savingStorage = ref(false);
+const backingUp = ref(false);
+const resetting = ref(false);
+const resetDialog = ref(false);
+const confirmText = ref("");
+const dbInfo = ref("");
 
-const ocrStatus = ref(null)
+const ocrStatus = ref(null);
 const ocrForm = reactive({
-  lang: 'chi_sim+eng',
-  tesseract_path: '',
+  lang: "chi_sim+eng",
+  tesseract_path: "",
   use_cloud: false,
-  cloud_api_key: '',
-  cloud_provider: 'baidu',
-})
+  cloud_api_key: "",
+  cloud_provider: "baidu",
+});
 
 const storageForm = reactive({
-  upload_path: '',
+  upload_path: "",
   file_size_threshold_mb: 1,
   auto_cleanup: true,
   cleanup_days: 30,
-})
+});
 
-const snackbar = reactive({ show: false, message: '', color: 'success' })
+const snackbar = reactive({ show: false, message: "", color: "success" });
 
-const showSnackbar = (message, color = 'success') => {
-  snackbar.message = message
-  snackbar.color = color
-  snackbar.show = true
-}
+const showSnackbar = (message, color = "success") => {
+  snackbar.message = message;
+  snackbar.color = color;
+  snackbar.show = true;
+};
 
 const ocrLanguages = [
-  { title: '简体中文', value: 'chi_sim' },
-  { title: '简体中文 + 英文', value: 'chi_sim+eng' },
-  { title: '英文', value: 'eng' },
-]
+  { title: "简体中文", value: "chi_sim" },
+  { title: "简体中文 + 英文", value: "chi_sim+eng" },
+  { title: "英文", value: "eng" },
+];
 
 const cloudProviders = [
-  { title: '百度云 OCR', value: 'baidu' },
-  { title: '腾讯云 OCR', value: 'tencent' },
-]
+  { title: "百度云 OCR", value: "baidu" },
+  { title: "腾讯云 OCR", value: "tencent" },
+];
 
 // ── 加载 ──
 onMounted(async () => {
-  await Promise.all([loadSettings(), loadOcrStatus()])
-})
+  await Promise.all([loadSettings(), loadOcrStatus()]);
+});
 
 const loadSettings = async () => {
   try {
-    const data = await settingsApi.getSettings()
-    ocrForm.lang = data.ocr.lang
-    ocrForm.tesseract_path = data.ocr.tesseract_path
-    ocrForm.use_cloud = data.ocr.use_cloud
-    ocrForm.cloud_api_key = data.ocr.cloud_api_key
-    ocrForm.cloud_provider = data.ocr.cloud_provider
+    const data = await settingsApi.getSettings();
+    ocrForm.lang = data.ocr.lang;
+    ocrForm.tesseract_path = data.ocr.tesseract_path;
+    ocrForm.use_cloud = data.ocr.use_cloud;
+    ocrForm.cloud_api_key = data.ocr.cloud_api_key;
+    ocrForm.cloud_provider = data.ocr.cloud_provider;
 
-    storageForm.upload_path = data.storage.upload_path
-    storageForm.file_size_threshold_mb = data.storage.file_size_threshold_mb
-    storageForm.auto_cleanup = data.storage.auto_cleanup
-    storageForm.cleanup_days = data.storage.cleanup_days
+    storageForm.upload_path = data.storage.upload_path;
+    storageForm.file_size_threshold_mb = data.storage.file_size_threshold_mb;
+    storageForm.auto_cleanup = data.storage.auto_cleanup;
+    storageForm.cleanup_days = data.storage.cleanup_days;
 
-    dbInfo.value = `${data.app.title} v${data.app.version}`
+    dbInfo.value = `${data.app.title} v${data.app.version}`;
   } catch (err) {
-    console.error('加载设置失败:', err)
-    showSnackbar('加载设置失败', 'error')
+    console.error("加载设置失败:", err);
+    showSnackbar("加载设置失败", "error");
   }
-}
+};
 
 const loadOcrStatus = async () => {
   try {
-    ocrStatus.value = await ocrApi.getStatus()
-  } catch (err) {
-    ocrStatus.value = { available: false, message: '检测失败' }
+    ocrStatus.value = await ocrApi.getStatus();
+  } catch {
+    ocrStatus.value = { available: false, message: "检测失败" };
   }
-}
+};
 
 // ── 保存 ──
 const saveOcrSettings = async () => {
-  savingOcr.value = true
+  savingOcr.value = true;
   try {
     await settingsApi.saveOcrSettings({
       ocr_lang: ocrForm.lang,
@@ -323,73 +441,73 @@ const saveOcrSettings = async () => {
       use_cloud_ocr: ocrForm.use_cloud,
       cloud_api_key: ocrForm.cloud_api_key,
       cloud_provider: ocrForm.cloud_provider,
-    })
-    showSnackbar('OCR 设置已保存')
+    });
+    showSnackbar("OCR 设置已保存");
   } catch (err) {
-    showSnackbar('保存失败: ' + (err.response?.data?.detail || err.message), 'error')
+    showSnackbar("保存失败: " + (err.response?.data?.detail || err.message), "error");
   } finally {
-    savingOcr.value = false
+    savingOcr.value = false;
   }
-}
+};
 
 const saveStorageSettings = async () => {
-  savingStorage.value = true
+  savingStorage.value = true;
   try {
     await settingsApi.saveStorageSettings({
       file_size_threshold_mb: storageForm.file_size_threshold_mb,
       auto_cleanup: storageForm.auto_cleanup,
       cleanup_days: storageForm.cleanup_days,
-    })
-    showSnackbar('存储设置已保存')
+    });
+    showSnackbar("存储设置已保存");
   } catch (err) {
-    showSnackbar('保存失败: ' + (err.response?.data?.detail || err.message), 'error')
+    showSnackbar("保存失败: " + (err.response?.data?.detail || err.message), "error");
   } finally {
-    savingStorage.value = false
+    savingStorage.value = false;
   }
-}
+};
 
 // ── 备份 ──
 const backupDatabase = async () => {
-  backingUp.value = true
+  backingUp.value = true;
   try {
-    const blob = await settingsApi.backupDatabase()
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `invoice_backup_${new Date().toISOString().split('T')[0]}.db`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    window.URL.revokeObjectURL(url)
-    showSnackbar('数据库备份已下载')
+    const blob = await settingsApi.backupDatabase();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `invoice_backup_${new Date().toISOString().split("T")[0]}.db`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    showSnackbar("数据库备份已下载");
   } catch (err) {
-    showSnackbar('备份失败: ' + (err.response?.data?.detail || err.message), 'error')
+    showSnackbar("备份失败: " + (err.response?.data?.detail || err.message), "error");
   } finally {
-    backingUp.value = false
+    backingUp.value = false;
   }
-}
+};
 
 // ── 重置 ──
 const confirmReset = () => {
-  resetDialog.value = true
-  confirmText.value = ''
-}
+  resetDialog.value = true;
+  confirmText.value = "";
+};
 
 const resetDatabase = async () => {
-  if (confirmText.value !== 'RESET') return
+  if (confirmText.value !== "RESET") return;
 
-  resetting.value = true
+  resetting.value = true;
   try {
-    await settingsApi.resetDatabase()
-    resetDialog.value = false
-    showSnackbar('数据库已重置')
+    await settingsApi.resetDatabase();
+    resetDialog.value = false;
+    showSnackbar("数据库已重置");
     setTimeout(() => {
-      router.push('/')
-    }, 1500)
+      router.push("/");
+    }, 1500);
   } catch (err) {
-    showSnackbar('重置失败: ' + (err.response?.data?.detail || err.message), 'error')
+    showSnackbar("重置失败: " + (err.response?.data?.detail || err.message), "error");
   } finally {
-    resetting.value = false
+    resetting.value = false;
   }
-}
+};
 </script>

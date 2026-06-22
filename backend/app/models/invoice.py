@@ -1,4 +1,16 @@
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -35,6 +47,7 @@ class Invoice(Base):
     __tablename__ = "invoices"
     __table_args__ = (
         UniqueConstraint("invoice_number", "invoice_code", name="uix_invoice_number_code"),
+        Index("idx_invoice_date_code_number", "invoice_date", "invoice_number", "invoice_code"),
     )
 
     id = Column(Integer, primary_key=True, index=True)

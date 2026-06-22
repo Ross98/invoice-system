@@ -1,8 +1,20 @@
 <template>
   <div class="empty-state">
-    <v-icon :size="iconSize" :color="iconColor">{{ icon }}</v-icon>
-    <div class="empty-state__title">{{ title }}</div>
-    <div v-if="subtitle" class="empty-state__subtitle">{{ subtitle }}</div>
+    <v-icon
+      :size="iconSize"
+      :color="iconColor"
+    >
+      {{ icon }}
+    </v-icon>
+    <div class="empty-state__title">
+      {{ title }}
+    </div>
+    <div
+      v-if="subtitle"
+      class="empty-state__subtitle"
+    >
+      {{ subtitle }}
+    </div>
     <v-btn
       v-if="actionText"
       :color="actionColor"
@@ -18,17 +30,17 @@
 
 <script setup>
 defineProps({
-  icon: { type: String, default: 'mdi-inbox-outline' },
+  icon: { type: String, default: "mdi-inbox-outline" },
   iconSize: { type: [String, Number], default: 64 },
-  iconColor: { type: String, default: 'grey-lighten-1' },
-  title: { type: String, default: '暂无数据' },
-  subtitle: { type: String, default: '' },
-  actionText: { type: String, default: '' },
-  actionIcon: { type: String, default: 'mdi-plus' },
-  actionColor: { type: String, default: 'primary' }
-})
+  iconColor: { type: String, default: "grey-lighten-1" },
+  title: { type: String, default: "暂无数据" },
+  subtitle: { type: String, default: "" },
+  actionText: { type: String, default: "" },
+  actionIcon: { type: String, default: "mdi-plus" },
+  actionColor: { type: String, default: "primary" },
+});
 
-defineEmits(['action'])
+defineEmits(["action"]);
 </script>
 
 <style scoped>

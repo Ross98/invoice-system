@@ -5,7 +5,7 @@ from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
 from ..models.invoice import Category, Counterpart, Invoice
@@ -66,39 +66,49 @@ def get_dashboard_stats(
 
     # --- 月度趋势（过去12个月） ---
     trend_data = []
+    # 计算过去 12 个月的时间窗口起点（含本月）
+    earliest = now - relativedelta(months=11)
+    trend_window_start = date(earliest.year, earliest.month, 1)
+    if now.month == 12:
+        trend_window_end = date(now.year + 1, 1, 1)
+    else:
+        trend_window_end = date(now.year, now.month + 1, 1)
+    # 单条 SQL 一次性聚合整段时间窗口（可能跨年）
+    trend_rows = db.query(
+        func.strftime('%Y', Invoice.invoice_date).label('yr'),
+        func.strftime('%m', Invoice.invoice_date).label('mo'),
+        func.count(Invoice.id).label('cnt'),
+        func.coalesce(func.sum(Invoice.total_with_tax), 0).label('amt'),
+    ).filter(
+        Invoice.invoice_date >= trend_window_start,
+        Invoice.invoice_date < trend_window_end,
+    ).group_by('yr', 'mo').all()
+    # 索引化（(year, month) -> (count, amount)）
+    trend_map = {
+        (int(r.yr), int(r.mo)): (int(r.cnt), float(r.amt or 0)) for r in trend_rows
+    }
     for i in range(11, -1, -1):
         dt = now - relativedelta(months=i)
-        sm = date(dt.year, dt.month, 1)
-        if dt.month == 12:
-            em = date(dt.year + 1, 1, 1)
-        else:
-            em = date(dt.year, dt.month + 1, 1)
-
-        count = db.query(Invoice).filter(
-            Invoice.invoice_date >= sm, Invoice.invoice_date < em
-        ).count()
-        amount = db.query(Invoice).filter(
-            Invoice.invoice_date >= sm, Invoice.invoice_date < em
-        ).with_entities(
-            func.coalesce(func.sum(Invoice.total_with_tax), 0)
-        ).scalar() or 0
-
+        cnt, amt = trend_map.get((dt.year, dt.month), (0, 0.0))
         trend_data.append({
             "year": dt.year,
             "month": dt.month,
             "label": f"{dt.month}月",
-            "count": count,
-            "amount": round(float(amount), 2),
+            "count": cnt,
+            "amount": round(amt, 2),
         })
 
     # --- 分类占比 ---
+    # outerjoin + 把日期过滤放进 ON 条件，避免无发票的分类被滤掉（保持 LEFT JOIN 语义）
     cat_rows = db.query(
         Category.name,
         func.coalesce(func.sum(Invoice.total_with_tax), 0).label("total"),
         func.count(Invoice.id).label("cnt"),
-    ).outerjoin(Invoice, Invoice.category_id == Category.id).filter(
-        Invoice.invoice_date >= year_start,
-        Invoice.invoice_date < year_end,
+    ).outerjoin(
+        Invoice,
+        (Invoice.category_id == Category.id)
+        & (Invoice.invoice_date >= year_start)
+        & (Invoice.invoice_date < year_end),
     ).group_by(Category.id, Category.name).order_by(func.sum(Invoice.total_with_tax).desc()).all()
 
     category_dist = []
@@ -116,7 +126,7 @@ def get_dashboard_stats(
         Counterpart.name,
         func.coalesce(func.sum(Invoice.total_with_tax), 0).label("total"),
         func.count(Invoice.id).label("cnt"),
-    ).join(Invoice, Invoice.counterpart_id == Counterpart.id).filter(
+    ).outerjoin(Invoice, Invoice.counterpart_id == Counterpart.id).filter(
         Invoice.invoice_date >= year_start,
         Invoice.invoice_date < year_end,
     ).group_by(Counterpart.id, Counterpart.name).order_by(func.sum(Invoice.total_with_tax).desc()).limit(5).all()
@@ -132,7 +142,10 @@ def get_dashboard_stats(
         })
 
     # --- 最近发票（前5条） ---
-    recent_query = db.query(Invoice).order_by(Invoice.created_at.desc()).limit(5)
+    recent_query = db.query(Invoice).options(
+        selectinload(Invoice.category),
+        selectinload(Invoice.counterpart),
+    ).order_by(Invoice.created_at.desc()).limit(5)
     recent = []
     for inv in recent_query:
         recent.append({

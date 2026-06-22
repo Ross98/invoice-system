@@ -1,0 +1,127 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, V2.0]
+  pull_request:
+    branches: [main, V2.0]
+
+jobs:
+  # ============= 后端测试 (Python + pytest) =============
+  backend:
+    name: Backend (Python ${{ matrix.python-version }})
+    runs-on: windows-latest  # 项目主运行平台
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install system dependencies (Tesseract + Poppler)
+        # Windows runners pre-install these via choco; for Linux add:
+        # sudo apt-get install -y tesseract-ocr tesseract-ocr-chi-sim poppler-utils
+        shell: bash
+        run: |
+          echo "Tesseract path: $(which tesseract || echo 'not installed')"
+          echo "Poppler path: $(which pdftoppm || echo 'not installed')"
+
+      - name: Install Python dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov httpx
+
+      - name: Run pytest with coverage
+        working-directory: backend
+        env:
+          PYTHONIOENCODING: utf-8
+          ADMIN_TOKEN: ""  # 测试时不强制鉴权
+        run: |
+          pytest tests/ --cov=app --cov-report=xml --cov-report=term --cov-fail-under=0
+
+      - name: Run ruff lint
+        # 从项目根目录跑,让 ruff.toml 的 src/exclude 配置正确解析
+        run: |
+          pip install ruff
+          ruff check backend/app/
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.12' && github.event_name == 'push'
+        uses: codecov/codecov-action@v4
+        with:
+          file: backend/coverage.xml
+          flags: backend
+          fail_ci_if_error: false
+        continue-on-error: true  # Codecov 未配置时不阻塞
+
+  # ============= 前端测试 (Node + lint) =============
+  frontend:
+    name: Frontend (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest  # Node 任务用 Linux 更快
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["20"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Build (production)
+        # 验证 Vite 生产构建无错,提前发现 import/资源/类型问题
+        working-directory: frontend
+        run: npm run build
+
+      - name: Upload build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ============= 必需检查(两个 job 都过才算绿) =============
+  required:
+    name: All checks passed
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    if: always()
+    steps:
+      - name: Check all jobs succeeded
+        run: |
+          if [ "${{ needs.backend.result }}" != "success" ] || [ "${{ needs.frontend.result }}" != "success" ]; then
+            echo "❌ One or more jobs failed"
+            echo "Backend: ${{ needs.backend.result }}"
+            echo "Frontend: ${{ needs.frontend.result }}"
+            exit 1
+          fi
+          echo "✅ All checks passed"

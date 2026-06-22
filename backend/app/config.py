@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     PORT: int = 8000
     CORS_ORIGINS: str = "*"  # 生产环境改为具体域名，如 "https://invoice.your-domain.com"
 
+    # 管理接口鉴权 — 留空(None)则本地不强制校验；生产部署务必设置 INVOICE_ADMIN_TOKEN
+    ADMIN_TOKEN: str | None = None
+
     class Config:
         env_file = _default_env_file()
 
